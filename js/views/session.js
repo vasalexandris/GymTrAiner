@@ -156,13 +156,15 @@ export function sessionView(root) {
     if (!wait) { sp(text, { interrupt: true }); return; }
     await sp(text); ctl.skip = false; await gate();
   }
+  // Αναμονή σε ΠΡΑΓΜΑΤΙΚΟ χρόνο (performance.now), ώστε φωνή/βίντεο/κίνηση να μένουν συγχρονισμένα και σε αργές συσκευές
   async function wait(sec, onTick) {
-    let left = sec; onTick?.(Math.ceil(left));
+    let left = sec, last = performance.now(); onTick?.(Math.ceil(left));
     while (left > 0) {
       await gate();
       if (ctl.skip) { ctl.skip = false; return; }
-      await sleep(100); if (!paused) left -= 0.1;
-      onTick?.(Math.ceil(left));
+      await sleep(Math.min(100, Math.max(10, left * 1000)));
+      const now = performance.now(); if (!paused) left -= (now - last) / 1000; last = now;
+      onTick?.(Math.max(0, Math.ceil(left)));
     }
   }
 

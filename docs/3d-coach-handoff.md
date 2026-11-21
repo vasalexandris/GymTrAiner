@@ -19,6 +19,7 @@ as ./js/vendor/three.module.min.js plus examples/jsm loaders/postprocessing). An
 plans; during a workout a 3D coach demonstrates each exercise while a voice coach counts reps. The attached bundle
 contains the complete 3D coach code:
 
+- js/ik.js         – analytic two-bone IK, joint limits, keyframe curves.
 - js/motions.js    – motion library: each exercise = poses A and B (joint angles in radians for a simple FK "proxy"
                      skeleton), tempo, easing profile [toB, hold, back], camera framing, flags (floor, alt, palm, ...).
                      Also exercise-name → motion inference and reps parsing.
