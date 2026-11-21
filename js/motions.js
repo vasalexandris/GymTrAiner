@@ -20,20 +20,20 @@ const lunge = P({ ...arms(-0.3, 0.1), hlx: -1.1, knL: 1.3, hrx: 0.5, knR: 1.6 })
 const knee = P({ ...arms(-0.5, 0, -1.6), hlx: -1.5, knL: 1.6, srx: -1.0, slx: 0.5 });
 
 export const MOTIONS = {
-  squat:         { label: 'Καθίσματα', tempo: 3, yaw: 1.0, A: P({ ...arms(-0.25), ...legs(-0.05) }), B: P({ tx: 0.55, ...arms(-2.1), ...legs(-1.45, 1.9, 0.12) }) },
-  lunge:         { label: 'Εκπτώσεις', tempo: 3.5, yaw: 1.0, alt: true, A: P(arms(-0.3, 0.1)), B: lunge },
-  hinge:         { label: 'Έλξη ισχίου', tempo: 3.5, yaw: 1.0, A: P(arms(-0.1)), B: P({ tx: 1.15, ...arms(-1.25), ...legs(-0.55, 0.55) }) },
-  row:           { label: 'Κωπηλατική', tempo: 3, yaw: 1.0, A: P({ tx: 1.0, ...arms(-1.0), ...legs(-0.45, 0.5) }), B: P({ tx: 1.0, ...arms(-0.35, 0, -0.9), ...legs(-0.45, 0.5) }) },
-  overhead_press:{ label: 'Πιέσεις ώμων', tempo: 3, yaw: 0.25, A: P(arms(-0.4, 0.35, -2.1)), B: P(arms(-3.0, 0.15, -0.05)) },
-  curl:          { label: 'Καμπές δικεφάλων', tempo: 3, yaw: 0.5, A: P(arms(-0.05, 0.05, -0.05)), B: P(arms(-0.2, 0.05, -2.5)) },
-  lateral_raise: { label: 'Πλάγιες ανυψώσεις', tempo: 3, yaw: 0.2, A: P(arms(0, 0.08, -0.1)), B: P(arms(0, 1.45, -0.25)) },
+  squat:         { label: 'Καθίσματα', tempo: 3, prof: [0.5, 0.08, 0.42], yaw: 1.0, A: P({ ...arms(-0.25), ...legs(-0.05) }), B: P({ tx: 0.55, ...arms(-2.1), ...legs(-1.45, 1.9, 0.12) }) },
+  lunge:         { label: 'Εκπτώσεις', tempo: 3.5, prof: [0.5, 0.06, 0.44], yaw: 1.0, alt: true, A: P(arms(-0.3, 0.1)), B: lunge },
+  hinge:         { label: 'Έλξη ισχίου', tempo: 3.5, prof: [0.5, 0.08, 0.42], yaw: 1.0, A: P(arms(-0.1)), B: P({ tx: 1.15, ...arms(-1.25), ...legs(-0.55, 0.55) }) },
+  row:           { label: 'Κωπηλατική', tempo: 3, prof: [0.4, 0.12, 0.48], yaw: 1.0, A: P({ tx: 1.0, ...arms(-1.0), ...legs(-0.45, 0.5) }), B: P({ tx: 1.0, ...arms(-0.35, 0, -0.9), ...legs(-0.45, 0.5) }) },
+  overhead_press:{ label: 'Πιέσεις ώμων', tempo: 3, prof: [0.45, 0.1, 0.45], yaw: 0.25, A: P(arms(-0.4, 0.35, -2.1)), B: P(arms(-3.0, 0.15, -0.05)) },
+  curl:          { label: 'Καμπές δικεφάλων', tempo: 3, prof: [0.4, 0.1, 0.5], yaw: 0.5, A: P(arms(-0.05, 0.05, -0.05)), B: P(arms(-0.2, 0.05, -2.5)) },
+  lateral_raise: { label: 'Πλάγιες ανυψώσεις', tempo: 3, prof: [0.4, 0.1, 0.5], yaw: 0.2, A: P(arms(0, 0.08, -0.1)), B: P(arms(0, 1.45, -0.25)) },
   jumping_jack:  { label: 'Jumping jacks', tempo: 1.2, yaw: 0.2, noZ: true, A: P({ ...arms(0, 0.15), ...legs(0, 0, 0.08) }), B: P({ ...arms(0, 2.9), ...legs(0, 0, 0.38), lift: 0.05 }) },
   high_knees:    { label: 'Ψηλά γόνατα', tempo: 1.4, yaw: 0.6, alt: true, noZ: true, A: P(arms(-0.5, 0, -1.6)), B: knee },
-  calf_raise:    { label: 'Ανασηκώσεις γάμπας', tempo: 2, yaw: 0.8, A: P(arms(0)), B: P({ ...arms(0), anL: 0.9, anR: 0.9, lift: 0.09 }) },
-  pushup:        { label: 'Κάμψεις', tempo: 3, yaw: 1.35, floor: true, A: pushTop, B: pushBot },
-  plank:         { label: 'Σανίδα', tempo: 3, yaw: 1.35, floor: true, hold: true, A: pushTop, B: pushTop },
-  crunch:        { label: 'Κοιλιακοί', tempo: 2.5, yaw: 1.35, floor: true, A: P({ ...lie, ...arms(-1.5), hd: 0 }), B: P({ ...lie, tx: 0.85, hd: 0.25, ...arms(-1.9) }) },
-  glute_bridge:  { label: 'Γέφυρα γλουτών', tempo: 3, yaw: 1.35, floor: true, A: P({ ...lie, ...arms(-1.57) }), B: P({ ...lie, rrx: -1.97, rY: 0.32, ...legs(-0.01, 1.89), ...arms(-1.57) }) },
+  calf_raise:    { label: 'Ανασηκώσεις γάμπας', tempo: 2, prof: [0.4, 0.2, 0.4], yaw: 0.8, A: P(arms(0)), B: P({ ...arms(0), anL: 0.9, anR: 0.9, lift: 0.09 }) },
+  pushup:        { label: 'Κάμψεις', tempo: 3, prof: [0.5, 0.05, 0.45], yaw: 1.35, floor: true, flatFeet: false, A: pushTop, B: pushBot },
+  plank:         { label: 'Σανίδα', tempo: 3, yaw: 1.35, floor: true, hold: true, flatFeet: false, A: pushTop, B: pushTop },
+  crunch:        { label: 'Κοιλιακοί', tempo: 2.5, prof: [0.45, 0.1, 0.45], yaw: 1.35, floor: true, A: P({ ...lie, ...arms(-1.5), hd: 0 }), B: P({ ...lie, tx: 0.85, hd: 0.25, ...arms(-1.9) }) },
+  glute_bridge:  { label: 'Γέφυρα γλουτών', tempo: 3, prof: [0.4, 0.2, 0.4], yaw: 1.35, floor: true, A: P({ ...lie, ...arms(-1.57) }), B: P({ ...lie, rrx: -1.97, rY: 0.32, ...legs(-0.01, 1.89), ...arms(-1.57) }) },
   generic:       { label: 'Κίνηση άσκησης', tempo: 2.5, yaw: 0.5, alt: true, A: P(arms(-0.3, 0, -0.8)), B: P({ ...arms(-0.8, 0, -1.2), hlx: -0.7, knL: 0.9 }) },
 };
 
