@@ -7,6 +7,7 @@ import { videoBlock, musicBlock } from '../media.js';
 import { altPanel } from '../alternative.js';
 import { equipmentFor } from '../equipment.js';
 import { getCustomModel } from '../modelstore.js';
+import { ytSearch } from '../api.js';
 
 const JUMP = Symbol('jump'), STOP = Symbol('stop');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -19,6 +20,8 @@ export function sessionView(root) {
   const C = (state.settings.coach ||= { voice: true, speed: 1 });
   if (!C.lookV2) { C.look = 'real'; C.lookV2 = true; save(); } // νέα προεπιλογή: ρεαλιστικός coach
   let customModel = null;
+  C.view ||= state.settings.ytKey ? 'video' : '3d'; // 'video': πραγματικός άνθρωπος σε loop · '3d': avatar
+  state.videoPick ||= {};
   setVoiceEnabled(C.voice); setVoiceRate(1);
 
   const ctl = { stop: false, jump: null, skip: false, skipIntro: false };
@@ -38,8 +41,15 @@ export function sessionView(root) {
   const warn = h('div');
 
   const onModelError = e => toast('Δεν φορτώθηκε το 3D μοντέλο — χρησιμοποιώ τον απλό coach. ' + (e?.message || ''), 'error');
+  const videoBox = h('div', { class: 'video-box' });
+  let iframe = null, videoList = [], videoIdx = 0, videoFor = '';
+  const ytCmd = func => { try { iframe?.contentWindow?.postMessage(JSON.stringify({ event: 'command', func, args: [] }), '*'); } catch { /* ignore */ } };
+
   function makeAvatar() {
-    avatar?.dispose(); avatar = null;
+    avatar?.dispose(); avatar = null; videoFor = '';
+    stage.classList.toggle('video', C.view === 'video');
+    if (C.view === 'video') { canvasBox.replaceChildren(); canvasBox.append(videoBox); prepare(); return; }
+    videoBox.replaceChildren(); iframe = null; canvasBox.replaceChildren();
     try {
       if (!webglAvailable()) throw new Error('no webgl');
       const look = C.look === 'custom' && !customModel ? 'real' : C.look;
@@ -49,6 +59,34 @@ export function sessionView(root) {
       console.warn('3D μη διαθέσιμο', e);
       mount(canvasBox, h('div', { class: 'empty' }, h('div', { class: 'ico' }, '🏋️'), h('p', { class: 'muted' }, 'Το 3D animation δεν υποστηρίζεται σε αυτή τη συσκευή· ο coach θα συνεχίσει με φωνή και οδηγίες.')));
     }
+  }
+
+  /** Βίντεο πραγματικού ανθρώπου σε loop (βουβό· μιλάει ο coach) */
+  async function loadVideo(ex, next = false) {
+    if (C.view !== 'video') return;
+    const q = ex.youtube_query || `${ex.name} exercise`;
+    if (videoFor !== q) {
+      videoFor = q; videoList = []; mount(videoBox, h('div', { class: 'avatar-loading' }, '⏳ Βρίσκω βίντεο επίδειξης…'));
+      try { videoList = (await ytSearch(q, { max: 6, short: true })) || []; }
+      catch (e) { toast(e.message, 'error'); }
+      if (videoFor !== q) return; // άλλαξε άσκηση στο μεταξύ
+      if (!videoList.length) {
+        mount(videoBox, h('div', { class: 'avatar-loading' }, state.settings.ytKey ? 'Δεν βρέθηκε βίντεο — δοκίμασε τον 3D coach.' : 'Χρειάζεται YouTube API key (Ρυθμίσεις) για βίντεο μέσα στην εφαρμογή.'));
+        return;
+      }
+      const saved = videoList.findIndex(v => v.id === state.videoPick[ex.name]);
+      videoIdx = saved >= 0 ? saved : 0;
+    } else if (next && videoList.length) {
+      videoIdx = (videoIdx + 1) % videoList.length; state.videoPick[ex.name] = videoList[videoIdx].id; save();
+    }
+    const v = videoList[videoIdx]; if (!v) return;
+    const id = encodeURIComponent(v.id);
+    iframe = h('iframe', {
+      src: `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&mute=1&loop=1&playlist=${id}&controls=0&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3&enablejsapi=1`,
+      allow: 'autoplay; encrypted-media; picture-in-picture', title: v.title, class: 'loop-video',
+    });
+    iframe.addEventListener('load', () => { if (paused) ytCmd('pauseVideo'); });
+    mount(videoBox, iframe, h('div', { class: 'video-credit' }, `▶ ${v.channel}`));
   }
 
   // φωνή + κίνηση στόματος του avatar
@@ -81,7 +119,7 @@ export function sessionView(root) {
 
   function prepare() {
     const ex = day.exercises[ei], mk = inferMotion(ex);
-    avatar?.setMotion(mk); avatar?.setEquipment(equipmentFor(ex, mk)); if (!started) avatar?.ready(); hud(''); drawInfo();
+    avatar?.setMotion(mk); avatar?.setEquipment(equipmentFor(ex, mk)); if (!started) avatar?.ready(); hud(''); drawInfo(); loadVideo(ex);
   }
 
   function drawControls() {
@@ -92,10 +130,13 @@ export function sessionView(root) {
         phase === 'intro' || phase === 'rest' || phase === 'count' ? btn('⏩ Παράλειψη', skip) : null,
         btn('⏮', () => jump(ei - 1)), btn('⏭ Επόμενη άσκηση', () => jump(ei + 1)),
       ],
-      h('select', { style: 'width:auto', title: 'Εμφάνιση coach', onchange: e => {
-        C.look = e.target.value; save(); makeAvatar();
+      C.view === '3d' && h('select', { style: 'width:auto', title: 'Εμφάνιση coach', onchange: e => {
+        C.look = e.target.value; C.view = '3d'; save(); makeAvatar(); drawControls();
       } }, Object.keys(LOOKS).filter(k => k !== 'custom' || customModel).map(k => h('option', { value: k, selected: k === C.look }, LOOK_LABEL[k]))),
       btn('⛶', toggleFull),
+      h('select', { style: 'width:auto', title: 'Προβολή', onchange: e => { C.view = e.target.value; save(); makeAvatar(); drawControls(); } },
+        [['video', '🎬 Βίντεο (πραγματικός άνθρωπος)'], ['3d', '🧍 3D coach']].map(([v, l]) => h('option', { value: v, selected: v === C.view }, l))),
+      C.view === 'video' ? btn('↻ Άλλο βίντεο', () => loadVideo(day.exercises[ei], true)) : null,
       btn(C.voice ? '🔊 Φωνή' : '🔇 Φωνή', e => { C.voice = !C.voice; setVoiceEnabled(C.voice); save(); drawControls(); }),
       h('select', { style: 'width:auto', title: 'Ρυθμός', onchange: e => { C.speed = +e.target.value; save(); } },
         [[1.35, '🐢 Αργός ρυθμός'], [1, '⏱ Κανονικός'], [0.8, '🐇 Γρήγορος']].map(([v, l]) => h('option', { value: v, selected: v === C.speed }, l))),
@@ -103,7 +144,7 @@ export function sessionView(root) {
   }
 
   function setPaused(on) {
-    paused = on; avatar?.pause(on);
+    paused = on; avatar?.pause(on); ytCmd(on ? 'pauseVideo' : 'playVideo');
     if (on) cancelSpeech(); 
     if (started) setCaption(on ? '⏸ Παύση' : '▶ Συνεχίζουμε!');
     drawControls();

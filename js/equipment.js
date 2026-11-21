@@ -21,8 +21,8 @@ export function equipmentFor(ex, motion) {
   if (/goblet|κύπελλο/i.test(text)) e.goblet = true;
   if (e.kettlebell) { delete e.dumbbells; }
   if (e.barbell) { delete e.dumbbells; }
-  if (motion && ['pushup', 'plank', 'crunch', 'glute_bridge'].includes(motion)) e.mat = true;
-  if (['pushup', 'plank', 'jumping_jack', 'high_knees'].includes(motion)) { delete e.dumbbells; delete e.kettlebell; delete e.barbell; }
+  if (motion && ['pushup', 'plank', 'crunch', 'glute_bridge', 'bird_dog'].includes(motion)) e.mat = true;
+  if (['pushup', 'plank', 'jumping_jack', 'high_knees', 'bird_dog'].includes(motion)) { delete e.dumbbells; delete e.kettlebell; delete e.barbell; }
   return e;
 }
 

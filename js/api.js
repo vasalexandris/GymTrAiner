@@ -62,13 +62,14 @@ export const textPart = text => ({ role: 'user', parts: [{ text }] });
 export const ytSearchUrl = q => 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q);
 
 /** Επιστρέφει [{id,title,channel,thumb}] ή null αν δεν υπάρχει key. Cache για εξοικονόμηση quota (100 units/search). */
-export async function ytSearch(query, { max = 3, music = false } = {}) {
+export async function ytSearch(query, { max = 3, music = false, short = false } = {}) {
   const key = state.settings.ytKey;
   if (!key) return null;
-  const ck = (music ? 'm:' : 'v:') + query.toLowerCase();
+  const ck = (music ? 'm:' : short ? 's:' : 'v:') + query.toLowerCase();
   if (state.ytCache[ck]) return state.ytCache[ck];
   const p = new URLSearchParams({ part: 'snippet', type: 'video', maxResults: String(max), q: query, videoEmbeddable: 'true', safeSearch: 'strict', key });
   if (music) p.set('videoCategoryId', '10');
+  if (short) p.set('videoDuration', 'short'); // < 4 λεπτά: καθαρή επίδειξη για loop
   const r = await fetch('https://www.googleapis.com/youtube/v3/search?' + p);
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error('YouTube: ' + (data?.error?.message || r.status));

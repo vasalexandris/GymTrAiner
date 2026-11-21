@@ -36,12 +36,17 @@ export const MOTIONS = {
   glute_bridge:  { label: 'Γέφυρα γλουτών', tempo: 3, prof: [0.4, 0.2, 0.4], yaw: 1.35, floor: true, A: P({ ...lie, ...arms(0.05, 0.18) }), B: P({ ...lie, rrx: -1.97, rY: 0.32, ...legs(-0.01, 1.89), ...arms(0.45, 0.18) }) },
   incline_row:   { label: 'Κωπηλατική με ιμάντες (TRX)', tempo: 3, prof: [0.4, 0.12, 0.48], yaw: 1.2, floor: true, frame: { h: 2.75, w: 2.4, cy: 1.25 },
                    A: P({ rrx: -0.6, rY: 0.796, rZ: -0.2, ...arms(-1.64) }), B: P({ rrx: -0.35, rY: 0.896, rZ: 0.0, ...arms(0.75, 0.1, -2.0) }) },
+  bird_dog:      { label: 'Bird-dog (στα τέσσερα)', tempo: 3.5, prof: [0.4, 0.2, 0.4], yaw: 1.3, floor: true, flatFeet: false, alt: true,
+                   A: P({ rrx: 1.37, rY: 0.51, rZ: 0, hd: -0.3, ...arms(-1.37), ...legs(-1.37, 1.57) }),
+                   B: P({ rrx: 1.37, rY: 0.51, rZ: 0, hd: -0.3, slx: -2.94, srx: -1.37, hlx: -1.37, knL: 1.57, hrx: 0.2, knR: 0 }) },
   generic:       { label: 'Κίνηση άσκησης', tempo: 2.5, yaw: 0.5, alt: true, A: P(arms(-0.3, 0, -0.8)), B: P({ ...arms(-0.8, 0, -1.2), hlx: -0.7, knL: 0.9 }) },
 };
 
 export const MOTION_KEYS = Object.keys(MOTIONS);
 
 const RULES = [
+  [/bird.?dog|διαγώνια έκταση|στα τέσσερα|τετραποδ|quadruped|superman.*γόνατ/i, 'bird_dog'],
+  [/dead.?bug|νεκρό έντομο/i, 'crunch'],
   [/(trx|ιμάντ|suspension).*(row|κωπηλ|έλξ)|(row|κωπηλ|έλξ).*(trx|ιμάντ|suspension)|inverted row|αντίστροφη κωπηλ/i, 'incline_row'],
   [/bench|στήθους|chest|dip|βουτι/i, 'generic'],
   [/jumping|jack|ανοιχτά άλματα|άλματα ανοι/i, 'jumping_jack'],
