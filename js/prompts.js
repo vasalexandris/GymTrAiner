@@ -44,11 +44,11 @@ ${contextText()}
  "goals": [{"id":"g1","title":"...","why":"γιατί ταιριάζει σε αυτόν","target":"μετρήσιμος στόχος","timeframe":"π.χ. 12 εβδομάδες"}]
 }`;
 
-const MOTIONS = 'squat|lunge|hinge|pushup|plank|row|overhead_press|curl|lateral_raise|jumping_jack|high_knees|crunch|glute_bridge|calf_raise|generic';
+const MOTIONS = 'squat|lunge|hinge|pushup|plank|row|overhead_press|curl|lateral_raise|jumping_jack|high_knees|crunch|glute_bridge|calf_raise|incline_row|generic';
 
 export const EXERCISE_SHAPE = `{
      "name": "όνομα άσκησης στα ελληνικά", "sets": 3, "reps": "10-12 (ή π.χ. '30 δευτερόλεπτα' για ισομετρικές)", "rest_sec": 60,
-     "muscles": "κύριοι μύες", "equipment": "σώμα|αλτήρες|...",
+     "muscles": "κύριοι μύες", "equipment": "ακριβώς ό,τι χρειάζεται: σώμα|αλτήρες|kettlebell|λάστιχο|ιμάντες TRX|μπάρα|στρώμα",
      "instructions": ["βήμα 1","βήμα 2","βήμα 3"], "common_mistakes": "...", "modification": "εναλλακτική αν υπάρχει πόνος/δυσκολία",
      "motion": "ΕΝΑ από: ${MOTIONS} — η κίνηση της βιβλιοθήκης που μοιάζει περισσότερο (για το animation του coach)", "tempo_sec": 3,
      "youtube_query": "όρος αναζήτησης YouTube για σωστή εκτέλεση (κατά προτίμηση αγγλικά, π.χ. 'goblet squat proper form')",

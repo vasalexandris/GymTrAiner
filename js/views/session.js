@@ -5,6 +5,8 @@ import { MOTIONS, inferMotion, parseReps } from '../motions.js';
 import { speak, cancelSpeech, setVoiceEnabled, setVoiceRate, countWord, hasGreekVoice, voiceSupported } from '../voice.js';
 import { videoBlock, musicBlock } from '../media.js';
 import { altPanel } from '../alternative.js';
+import { equipmentFor } from '../equipment.js';
+import { getCustomModel } from '../modelstore.js';
 
 const JUMP = Symbol('jump'), STOP = Symbol('stop');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -15,12 +17,14 @@ export function sessionView(root) {
   const day = state.plan?.days?.[dayIdx];
   if (!day?.exercises?.length) { location.hash = '#/workout'; return; }
   const C = (state.settings.coach ||= { voice: true, speed: 1 });
-  C.look ||= 'male';
+  if (!C.lookV2) { C.look = 'real'; C.lookV2 = true; save(); } // νέα προεπιλογή: ρεαλιστικός coach
+  let customModel = null;
   setVoiceEnabled(C.voice); setVoiceRate(1);
 
   const ctl = { stop: false, jump: null, skip: false, skipIntro: false };
   let ei = 0, set = 1, rep = 0, phase = 'ready', paused = false, started = false, avatar = null, wake = null, altOpen = false;
   const N = () => day.exercises.length;
+  const LOOK_LABEL = { real: '🧍‍♀️ Coach: Ρεαλιστική', male: '🧔 Coach: Απλός', female: '👩 Coach: Απλή', custom: '⭐ Coach: Δικό μου μοντέλο' };
 
   // ---------- UI ----------
   const stage = h('div', { class: 'stage' });
@@ -33,12 +37,18 @@ export function sessionView(root) {
   const controls = h('div', { class: 'row', style: 'margin:12px 0' });
   const warn = h('div');
 
-  try {
-    if (webglAvailable()) { avatar = new Avatar(canvasBox, C.look); }
-    else throw new Error('no webgl');
-  } catch (e) {
-    console.warn('3D μη διαθέσιμο', e);
-    canvasBox.append(h('div', { class: 'empty' }, h('div', { class: 'ico' }, '🏋️'), h('p', { class: 'muted' }, 'Το 3D animation δεν υποστηρίζεται σε αυτή τη συσκευή· ο coach θα συνεχίσει με φωνή και οδηγίες.')));
+  const onModelError = e => toast('Δεν φορτώθηκε το 3D μοντέλο — χρησιμοποιώ τον απλό coach. ' + (e?.message || ''), 'error');
+  function makeAvatar() {
+    avatar?.dispose(); avatar = null;
+    try {
+      if (!webglAvailable()) throw new Error('no webgl');
+      const look = C.look === 'custom' && !customModel ? 'real' : C.look;
+      avatar = new Avatar(canvasBox, look, { customModel: customModel?.buf, onError: onModelError });
+      avatar.pause(paused); prepare();
+    } catch (e) {
+      console.warn('3D μη διαθέσιμο', e);
+      mount(canvasBox, h('div', { class: 'empty' }, h('div', { class: 'ico' }, '🏋️'), h('p', { class: 'muted' }, 'Το 3D animation δεν υποστηρίζεται σε αυτή τη συσκευή· ο coach θα συνεχίσει με φωνή και οδηγίες.')));
+    }
   }
 
   // φωνή + κίνηση στόματος του avatar
@@ -71,7 +81,7 @@ export function sessionView(root) {
 
   function prepare() {
     const ex = day.exercises[ei], mk = inferMotion(ex);
-    avatar?.setMotion(mk); avatar?.ready(); hud(''); drawInfo();
+    avatar?.setMotion(mk); avatar?.setEquipment(equipmentFor(ex, mk)); if (!started) avatar?.ready(); hud(''); drawInfo();
   }
 
   function drawControls() {
@@ -83,9 +93,9 @@ export function sessionView(root) {
         btn('⏮', () => jump(ei - 1)), btn('⏭ Επόμενη άσκηση', () => jump(ei + 1)),
       ],
       h('select', { style: 'width:auto', title: 'Εμφάνιση coach', onchange: e => {
-        C.look = e.target.value; save();
-        if (avatar) { avatar.dispose(); avatar = new Avatar(canvasBox, C.look); avatar.pause(paused); const mk = inferMotion(day.exercises[ei]); avatar.setMotion(mk); avatar.ready(); }
-      } }, Object.entries(LOOKS).map(([k, l]) => h('option', { value: k, selected: k === C.look }, k === 'male' ? '🧔 Coach: Άντρας' : '👩 Coach: Γυναίκα'))),
+        C.look = e.target.value; save(); makeAvatar();
+      } }, Object.keys(LOOKS).filter(k => k !== 'custom' || customModel).map(k => h('option', { value: k, selected: k === C.look }, LOOK_LABEL[k]))),
+      btn('⛶', toggleFull),
       btn(C.voice ? '🔊 Φωνή' : '🔇 Φωνή', e => { C.voice = !C.voice; setVoiceEnabled(C.voice); save(); drawControls(); }),
       h('select', { style: 'width:auto', title: 'Ρυθμός', onchange: e => { C.speed = +e.target.value; save(); } },
         [[1.35, '🐢 Αργός ρυθμός'], [1, '⏱ Κανονικός'], [0.8, '🐇 Γρήγορος']].map(([v, l]) => h('option', { value: v, selected: v === C.speed }, l))),
@@ -214,6 +224,7 @@ export function sessionView(root) {
 
   function cleanup() {
     ctl.stop = true; cancelSpeech(); avatar?.dispose(); avatar = null;
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     try { wake?.release(); } catch { /* ignore */ }
     document.removeEventListener('visibilitychange', onVis);
   }
@@ -224,9 +235,15 @@ export function sessionView(root) {
   // ---------- Αρχική εμφάνιση ----------
   if (voiceSupported() === false) mount(warn, h('div', { class: 'banner small' }, 'Η συσκευή/ο browser δεν υποστηρίζει φωνή· ο coach θα εμφανίζει υπότιτλους.'));
   setTimeout(() => { if (voiceSupported() && !hasGreekVoice() && !ctl.stop) mount(warn, h('div', { class: 'banner small' }, '🔈 Δεν βρέθηκε ελληνική φωνή στη συσκευή — η ομιλία μπορεί να ακούγεται ξενόγλωσσα. Στο κινητό: Ρυθμίσεις → Γλώσσα → Text-to-speech → Ελληνικά.')); }, 800);
+  const wrap = h('div', { class: 'stage-wrap' }, stage, controls);
+  function toggleFull() {
+    if (document.fullscreenElement) { document.exitFullscreen(); return; }
+    if (wrap.requestFullscreen) wrap.requestFullscreen().catch(() => wrap.classList.toggle('pseudo-fs'));
+    else wrap.classList.toggle('pseudo-fs'); // iPhone: «ψεύτικη» πλήρης οθόνη
+  }
   mount(root,
     h('div', { class: 'row between' }, h('h1', {}, day.focus || 'Προπόνηση'), h('span', { class: 'tag' }, '🎙 Coach mode')),
-    warn,
-    h('div', { class: 'session-grid' }, h('div', {}, stage, controls), info));
+    warn, wrap, info);
   prepare(); drawControls();
+  getCustomModel().then(m => { customModel = m || null; if (!ctl.stop) { makeAvatar(); drawControls(); } });
 }

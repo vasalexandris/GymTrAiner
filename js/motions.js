@@ -14,9 +14,9 @@ export function mirror(p) {
 }
 
 const pushTop = P({ rrx: 1.19, rY: 0.42, rZ: 0.14, hd: -0.5, ...arms(-1.19) });
-const pushBot = P({ rrx: 1.3, rY: 0.32, rZ: 0.12, hd: -0.5, ...arms(-0.37, 0, -0.9) });
+const pushBot = P({ rrx: 1.38, rY: 0.25, rZ: 0.12, hd: -0.45, ...arms(-0.28, 0.12, -1.1) });
 const lie = { rrx: -1.57, rY: 0.14, rZ: 0.1, ...legs(-0.84, 2.06) };
-const lunge = P({ ...arms(-0.3, 0.1), hlx: -1.1, knL: 1.3, hrx: 0.5, knR: 1.6 });
+const lunge = P({ ...arms(-0.3, 0.1), hlx: -1.1, knL: 1.3, hrx: 0.35, knR: 0.73, anR: 0.7, tx: 0.08 });
 const knee = P({ ...arms(-0.5, 0, -1.6), hlx: -1.5, knL: 1.6, srx: -1.0, slx: 0.5 });
 
 export const MOTIONS = {
@@ -32,14 +32,17 @@ export const MOTIONS = {
   calf_raise:    { label: 'Ανασηκώσεις γάμπας', tempo: 2, prof: [0.4, 0.2, 0.4], yaw: 0.8, A: P(arms(0)), B: P({ ...arms(0), anL: 0.9, anR: 0.9, lift: 0.09 }) },
   pushup:        { label: 'Κάμψεις', tempo: 3, prof: [0.5, 0.05, 0.45], yaw: 1.35, floor: true, flatFeet: false, A: pushTop, B: pushBot },
   plank:         { label: 'Σανίδα', tempo: 3, yaw: 1.35, floor: true, hold: true, flatFeet: false, A: pushTop, B: pushTop },
-  crunch:        { label: 'Κοιλιακοί', tempo: 2.5, prof: [0.45, 0.1, 0.45], yaw: 1.35, floor: true, A: P({ ...lie, ...arms(-1.5), hd: 0 }), B: P({ ...lie, tx: 0.85, hd: 0.25, ...arms(-1.9) }) },
-  glute_bridge:  { label: 'Γέφυρα γλουτών', tempo: 3, prof: [0.4, 0.2, 0.4], yaw: 1.35, floor: true, A: P({ ...lie, ...arms(-1.57) }), B: P({ ...lie, rrx: -1.97, rY: 0.32, ...legs(-0.01, 1.89), ...arms(-1.57) }) },
+  crunch:        { label: 'Κοιλιακοί', tempo: 2.5, prof: [0.45, 0.1, 0.45], yaw: 1.35, floor: true, A: P({ ...lie, ...arms(-0.35, 0.12), hd: 0 }), B: P({ ...lie, tx: 0.85, hd: 0.25, ...arms(-0.75, 0.1) }) },
+  glute_bridge:  { label: 'Γέφυρα γλουτών', tempo: 3, prof: [0.4, 0.2, 0.4], yaw: 1.35, floor: true, A: P({ ...lie, ...arms(0.05, 0.18) }), B: P({ ...lie, rrx: -1.97, rY: 0.32, ...legs(-0.01, 1.89), ...arms(0.45, 0.18) }) },
+  incline_row:   { label: 'Κωπηλατική με ιμάντες (TRX)', tempo: 3, prof: [0.4, 0.12, 0.48], yaw: 1.2, floor: true, frame: { h: 2.75, w: 2.4, cy: 1.25 },
+                   A: P({ rrx: -0.6, rY: 0.796, rZ: -0.2, ...arms(-1.64) }), B: P({ rrx: -0.35, rY: 0.896, rZ: 0.0, ...arms(0.75, 0.1, -2.0) }) },
   generic:       { label: 'Κίνηση άσκησης', tempo: 2.5, yaw: 0.5, alt: true, A: P(arms(-0.3, 0, -0.8)), B: P({ ...arms(-0.8, 0, -1.2), hlx: -0.7, knL: 0.9 }) },
 };
 
 export const MOTION_KEYS = Object.keys(MOTIONS);
 
 const RULES = [
+  [/(trx|ιμάντ|suspension).*(row|κωπηλ|έλξ)|(row|κωπηλ|έλξ).*(trx|ιμάντ|suspension)|inverted row|αντίστροφη κωπηλ/i, 'incline_row'],
   [/bench|στήθους|chest|dip|βουτι/i, 'generic'],
   [/jumping|jack|ανοιχτά άλματα|άλματα ανοι/i, 'jumping_jack'],
   [/high.?knee|ψηλά γόνατα|τρέξιμο|jog|βάδην|march|skip/i, 'high_knees'],
@@ -58,10 +61,14 @@ const RULES = [
 ];
 
 export function inferMotion(ex) {
-  if (ex.motion && MOTIONS[ex.motion]) return ex.motion;
-  const name = `${ex.name || ''} ${ex.youtube_query || ''}`;
-  for (const [re, m] of RULES) if (re.test(name)) return m;
-  return 'generic';
+  let m = ex.motion && MOTIONS[ex.motion] ? ex.motion : null;
+  if (!m) {
+    const name = `${ex.name || ''} ${ex.youtube_query || ''}`;
+    m = (RULES.find(([re]) => re.test(name)) || [, 'generic'])[1];
+  }
+  // κωπηλατική με ιμάντες TRX → κίνηση με κλίση προς τα πίσω
+  if (m === 'row' && /trx|ιμάντ|suspension/i.test(`${ex.equipment || ''} ${ex.name || ''}`)) m = 'incline_row';
+  return m;
 }
 
 /** "10-12" → {n:10} · "30 δευτερόλεπτα" → {timed:true,n:30} · "12 ανά πλευρά" → {perSide:true} */
