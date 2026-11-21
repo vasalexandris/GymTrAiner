@@ -2,6 +2,7 @@
 // μιας πραγματικής επανάληψης (τμήμα start→end) και την παίζει ακριβώς μία φορά.
 import { state, save } from './store.js';
 import { ytSearch, geminiJSON } from './api.js';
+import { loadLibrary, lookup, record } from './videolib.js';
 
 let apiP;
 function loadYT() {
@@ -15,7 +16,8 @@ function loadYT() {
   }));
 }
 
-const RATES = [0.5, 0.75, 1, 1.25, 1.5];
+const RATES = [0.5, 0.75, 1, 1.25, 1.5]; // ασφαλείς ταχύτητες YouTube
+const SPEECH_LEAD = 0.28; // δευτ.: η φωνή ξεκινά λίγο νωρίτερα ώστε να ακούγεται τη στιγμή που ολοκληρώνεται η κίνηση
 const segOk = s => s && s.end > s.start && s.end - s.start >= 0.7 && s.end - s.start <= 9;
 
 /** Ζητά από το Gemini (που «βλέπει» βίντεο YouTube) τα όρια μίας καθαρής επανάληψης. */
@@ -45,12 +47,31 @@ export class VideoCoach {
   get id() { return this.list[this.idx]?.id; }
   get seg() { const s = state.videoSeg[this.id]; return segOk(s) ? s : null; }
   get segLen() { const s = this.seg; return s ? (s.end - s.start) / this.rate : 0; }
-  setRate(speedMul) { const want = 1 / speedMul; this.rate = RATES.reduce((a, b) => Math.abs(b - want) < Math.abs(a - want) ? b : a, 1); try { this.player?.setPlaybackRate(this.rate); } catch { /* ignore */ } }
+  /** Ταίριασμα ρυθμού: ταχύτητα βίντεο ώστε 1 επανάληψη ≈ target δευτ. (ρυθμός άσκησης × επιλογή χρήστη) */
+  setTempo(target) {
+    this.target = target; const s = this.seg; if (!s || !target) return;
+    let rates = RATES;
+    try { const av = this.player?.getAvailablePlaybackRates?.(); if (av?.length) rates = av.filter(r => r >= 0.5 && r <= 1.5); } catch { /* ignore */ }
+    const want = (s.end - s.start) / target;
+    this.rate = rates.reduce((a, b) => Math.abs(Math.log(b / want)) < Math.abs(Math.log(a / want)) ? b : a, 1);
+    try { this.player?.setPlaybackRate(this.rate); } catch { /* ignore */ }
+  }
+  setRate() { if (this.target) this.setTempo(this.target); }
 
   /** Φόρτωση βίντεο για άσκηση (next: επόμενο από τη λίστα) */
   async show(ex, { next = false } = {}) {
     this.ex = ex;
     const q = ex.youtube_query || `${ex.name} exercise`;
+    await loadLibrary();
+    const lib = lookup(ex);
+    if (lib && !next && this.forQ !== q) { // κοινή βιβλιοθήκη: 0 κλήσεις API
+      this.forQ = q; this.fromLib = true;
+      this.list = [{ id: lib.id, title: lib.title, channel: lib.channel }]; this.idx = 0;
+      const cur = state.videoSeg[lib.id];
+      if (!(cur?.src === 'user' && segOk(cur))) state.videoSeg[lib.id] = { start: lib.start, end: lib.end, conf: 1, src: 'lib' };
+      await this.mountPlayer(); return;
+    }
+    if (next && this.fromLib) { this.forQ = ''; this.fromLib = false; } // ο χρήστης θέλει άλλο βίντεο → αναζήτηση
     if (this.forQ !== q) {
       this.forQ = q; this.list = []; this.onStatus('⏳ Βρίσκω βίντεο επίδειξης…');
       try {
@@ -79,7 +100,7 @@ export class VideoCoach {
       host: 'https://www.youtube-nocookie.com', videoId: id, width: '100%', height: '100%',
       playerVars: { autoplay: 1, mute: 1, controls: 0, playsinline: 1, rel: 0, modestbranding: 1, iv_load_policy: 3, disablekb: 1, fs: 0, loop: 1, playlist: id },
       events: {
-        onReady: e => { e.target.mute(); e.target.setPlaybackRate(this.rate); this.ready = true; this.apply(); },
+        onReady: e => { e.target.mute(); this.ready = true; this.setRate(); this.apply(); },
         onError: () => { this.onStatus('Αυτό το βίντεο δεν παίζει εδώ — περνάω στο επόμενο…'); if (this.list.length > 1) this.show(this.ex, { next: true }); },
       },
     });
@@ -92,14 +113,14 @@ export class VideoCoach {
     this.detecting = id; this.onStatus('🤖 Εντοπίζω μία επανάληψη στο βίντεο…');
     try {
       const seg = await detectRep(id, ex);
-      state.videoSeg[id] = seg; save();
-      if (id === this.id) { this.onStatus(''); this.apply(); }
+      state.videoSeg[id] = seg; save(); record(ex, this.list.find(v => v.id === id), seg);
+      if (id === this.id) { this.onStatus(''); this.setRate(); this.apply(); }
     } catch (e) {
       if (id === this.id) this.onStatus('Δεν βρέθηκε αυτόματα η επανάληψη — ορισέ τη χειροκίνητα (🎯) ή άλλαξε βίντεο. ' + (e.message || ''));
     } finally { if (this.detecting === id) this.detecting = null; }
   }
 
-  setSeg(start, end) { if (!this.id) return; state.videoSeg[this.id] = { start, end, conf: 1, src: 'user' }; save(); this.apply(); }
+  setSeg(start, end) { if (!this.id) return; const seg = { start, end, conf: 1, src: 'user' }; state.videoSeg[this.id] = seg; save(); record(this.ex, this.list[this.idx], seg); this.setRate(); this.apply(); }
   time() { try { return this.player?.getCurrentTime?.() || 0; } catch { return 0; } }
 
   // ---- λειτουργίες αναπαραγωγής ----
@@ -118,11 +139,12 @@ export class VideoCoach {
   hold() { this.mode = 'hold'; this.apply(); }       // ισομετρική: παίζει από την αρχή του τμήματος
 
   /** Μία επανάληψη: αρχή τμήματος → παίζει → περιμένει όσο διαρκεί */
-  async rep(wait) {
+  async rep(wait, onBeat) {
     const p = this.player, s = this.seg;
     this.mode = 'rep';
     try { p.seekTo(s.start, true); p.playVideo(); } catch { /* ignore */ }
-    await wait(this.segLen);
+    const len = this.segLen, lead = Math.min(SPEECH_LEAD, len * 0.25);
+    await wait(len - lead); onBeat?.(); await wait(lead);
     try { if (this.mode === 'rep') p.pauseVideo(); } catch { /* ignore */ }
   }
 

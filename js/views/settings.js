@@ -2,6 +2,7 @@ import { h, toast, download , mount} from '../ui.js';
 import { state, save, exportData, importData, resetAll } from '../store.js';
 import { gemini, textPart, listModels } from '../api.js';
 import { getCustomModel, saveCustomModel, deleteCustomModel } from '../modelstore.js';
+import { loadLibrary, libraryStats, exportLibrary } from '../videolib.js';
 
 export function settingsView(root) {
   const S = state.settings;
@@ -35,6 +36,7 @@ export function settingsView(root) {
           try { await gemini({ contents: [textPart('Απάντησε μόνο: OK')], maxTokens: 256, temperature: 0 }); status.textContent = '✅ Η σύνδεση λειτουργεί'; }
           catch (e) { status.textContent = '❌ ' + e.message; }
         } }, 'Δοκιμή σύνδεσης'), status)),
+    libraryCard(),
     coachCard(),
     h('div', { class: 'card' }, h('h2', {}, 'Τα δεδομένα μου'),
       h('p', { class: 'muted' }, 'Όλα τα δεδομένα (προφίλ, προγράμματα, πρόοδος, εξετάσεις) μένουν στον browser. Κάνε εξαγωγή για αντίγραφο ή για μεταφορά σε άλλη συσκευή (τα keys δεν περιλαμβάνονται).'),
@@ -72,4 +74,14 @@ function coachCard() {
     h('div', { class: 'row' }, h('label', { class: 'btn', style: 'margin:0;cursor:pointer;font-weight:400' }, '⬆ Ανέβασμα .glb', h('span', { hidden: true }, input)),
       h('button', { class: 'danger', onclick: async () => { await deleteCustomModel(); const C = state.settings.coach; if (C?.look === 'custom') { C.look = 'real'; save(); } toast('Διαγράφηκε'); refresh(); } }, 'Διαγραφή μοντέλου')),
     info);
+}
+
+function libraryCard() {
+  const info = h('p', { class: 'small muted' }, '…');
+  loadLibrary().then(() => { const st = libraryStats(); info.textContent = `Κοινή βιβλιοθήκη εφαρμογής: ${st.shared} ασκήσεις · Βρέθηκαν/ορίστηκαν στη συσκευή σου: ${st.local} (μαζί με συνώνυμα).`; });
+  return h('div', { class: 'card' }, h('h2', {}, '🎬 Βιβλιοθήκη βίντεο'),
+    h('p', {}, 'Κάθε βίντεο επίδειξης και το σημείο της επανάληψης βρίσκονται ', h('strong', {}, 'μία φορά'), '. Όσα είναι στην κοινή βιβλιοθήκη της εφαρμογής χρησιμοποιούνται από όλους τους χρήστες ', h('strong', {}, 'χωρίς κλήσεις API'), '.'),
+    info,
+    h('div', { class: 'row' }, h('button', { onclick: () => download('video-library.json', exportLibrary()) }, '⬇ Εξαγωγή βιβλιοθήκης (για το repo)')),
+    h('p', { class: 'hint' }, 'Μετά τις δοκιμές σου, κάνε εξαγωγή και αντικατέστησε το data/video-library.json στο repo — από εκεί και πέρα όλοι οι χρήστες τα παίρνουν έτοιμα.'));
 }

@@ -8,6 +8,7 @@ import { progressView } from './views/progress.js';
 import { medicalView } from './views/medical.js';
 import { coachView } from './views/coach.js';
 import { settingsView } from './views/settings.js';
+import { loadLibrary } from './videolib.js';
 
 const routes = {
   '/': dashboardView, '/onboarding': onboarding, '/goals': goalsView, '/workout': workoutView, '/session': sessionView,
@@ -25,5 +26,6 @@ function render() {
   catch (e) { console.error(e); mount(view, h('div', { class: 'card' }, h('h2', {}, 'Κάτι πήγε στραβά'), h('p', {}, e.message))); }
   window.scrollTo(0, 0);
 }
+loadLibrary(); // κοινή βιβλιοθήκη βίντεο (για τα prompts και την προπόνηση)
 addEventListener('hashchange', render);
 render();

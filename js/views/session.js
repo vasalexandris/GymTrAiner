@@ -48,7 +48,7 @@ export function sessionView(root) {
   const segLabel = h('div', { class: 'small' });
   const updSeg = () => {
     const sg = vc?.seg;
-    segLabel.textContent = sg ? `🎯 Επανάληψη στο βίντεο: ${sg.start.toFixed(1)}″ → ${sg.end.toFixed(1)}″ (${sg.src === 'ai' ? 'εντοπίστηκε αυτόματα' : 'ορίστηκε από σένα'})${markStart != null ? ` · αρχή σήμανσης ${markStart.toFixed(1)}″` : ''}`
+    segLabel.textContent = sg ? `🎯 Επανάληψη στο βίντεο: ${sg.start.toFixed(1)}″ → ${sg.end.toFixed(1)}″ (${sg.src === 'ai' ? 'εντοπίστηκε αυτόματα' : sg.src === 'lib' ? '✓ από τη βιβλιοθήκη της εφαρμογής' : 'ορίστηκε από σένα'})${vc.rate !== 1 ? ` · ταχύτητα ${vc.rate}×` : ''}${markStart != null ? ` · αρχή σήμανσης ${markStart.toFixed(1)}″` : ''}`
       : `🎯 Δεν έχει οριστεί ακόμα επανάληψη — το βίντεο παίζει ελεύθερα.${markStart != null ? ` Αρχή σήμανσης: ${markStart.toFixed(1)}″` : ''}`;
   };
   const setVStatus = t => { vStatus.textContent = t; vStatus.style.display = t ? '' : 'none'; updSeg(); };
@@ -57,7 +57,7 @@ export function sessionView(root) {
     stage.classList.toggle('video', C.view === 'video');
     if (C.view === 'video') {
       canvasBox.replaceChildren(videoBox, vStatus);
-      vc = new VideoCoach(videoBox, { onStatus: setVStatus }); vc.setRate(C.speed); vc.pause(paused);
+      vc = new VideoCoach(videoBox, { onStatus: setVStatus }); vc.pause(paused);
       prepare(); return;
     }
     canvasBox.replaceChildren();
@@ -112,7 +112,7 @@ export function sessionView(root) {
   function prepare() {
     const ex = day.exercises[ei], mk = inferMotion(ex);
     avatar?.setMotion(mk); avatar?.setEquipment(equipmentFor(ex, mk)); if (!started) avatar?.ready(); hud(''); drawInfo();
-    if (vc) { vc.show(ex).then(() => { if (phase === 'ready' || phase === 'intro') vc.demo(); else vc.freeze(); drawInfo(); }); }
+    if (vc) { const target = clamp(ex.tempo_sec || MOTIONS[mk].tempo, 1, 6) * C.speed; vc.show(ex).then(() => { vc?.setTempo(target); if (phase === 'ready' || phase === 'intro') vc?.demo(); else vc?.freeze(); drawInfo(); }); }
   }
 
   function drawControls() {
@@ -131,7 +131,7 @@ export function sessionView(root) {
         [['video', '🎬 Βίντεο (πραγματικός άνθρωπος)'], ['3d', '🧍 3D coach']].map(([v, l]) => h('option', { value: v, selected: v === C.view }, l))),
       C.view === 'video' ? btn('↻ Άλλο βίντεο', () => vc?.show(day.exercises[ei], { next: true }).then(() => { vc.demo(); drawInfo(); })) : null,
       btn(C.voice ? '🔊 Φωνή' : '🔇 Φωνή', e => { C.voice = !C.voice; setVoiceEnabled(C.voice); save(); drawControls(); }),
-      h('select', { style: 'width:auto', title: 'Ρυθμός', onchange: e => { C.speed = +e.target.value; vc?.setRate(C.speed); save(); } },
+      h('select', { style: 'width:auto', title: 'Ρυθμός', onchange: e => { C.speed = +e.target.value; save(); } },
         [[1.35, '🐢 Αργός ρυθμός'], [1, '⏱ Κανονικός'], [0.8, '🐇 Γρήγορος']].map(([v, l]) => h('option', { value: v, selected: v === C.speed }, l))),
       btn('Έξοδος', () => { cleanup(); location.hash = '#/workout'; }, 'danger'));
   }
@@ -192,13 +192,13 @@ export function sessionView(root) {
       for (let r = 1; r <= n; r++) {
         rep = r; hud(`${r}/${n}`);
         const alt = perSide ? side : (m.alt && r % 2 === 0);
-        if (vc?.canSync()) await vc.rep(wait); else if (avatar) await avatar.cycle(dur, alt); else await wait(dur);
-        chk(); await gate();
         let words = countWord(r);
         if (n >= 6 && r === Math.ceil(n / 2) && r !== n) words += ', μισά!';
         else if (n >= 6 && r === n - 2) words += ', ακόμα δύο!';
         else if (r === n) words += ', τέλεια!';
-        setCaption(words); sp(words, { interrupt: true });
+        const beat = () => { setCaption(words); sp(words, { interrupt: true }); };
+        if (vc?.canSync()) { vc.setTempo(dur); await vc.rep(wait, beat); chk(); }  // φωνή ακριβώς στο τέλος της κίνησης του βίντεο
+        else { if (avatar) await avatar.cycle(dur, alt); else await wait(dur); chk(); await gate(); beat(); }
       }
     }
     vc?.freeze();
