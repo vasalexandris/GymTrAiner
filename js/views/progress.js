@@ -2,8 +2,7 @@ import { h, md, spinner, withLoading, toast, fmtDate , mount} from '../ui.js';
 import { state, save, today } from '../store.js';
 import { gemini, textPart } from '../api.js';
 import { SYSTEM, REVIEW_PROMPT } from '../prompts.js';
-import { generatePlan } from './workout.js';
-import { generateMeal } from './nutrition.js';
+import { generateBoth } from '../generate.js';
 
 export function weightChart(points) {
   if (points.length < 2) return h('p', { class: 'muted' }, 'Χρειάζονται τουλάχιστον 2 μετρήσεις για γράφημα.');
@@ -44,9 +43,7 @@ export function progressView(root) {
   const adapt = h('button', {}, '🔁 Προσάρμοσε προγράμματα στα νέα δεδομένα');
   adapt.addEventListener('click', async () => {
     const extra = 'Ενημέρωση προόδου: ' + JSON.stringify(L.checkins.at(-1) || {}) + (state.lastReview ? '\nΠρόσφατη αξιολόγηση coach: ' + state.lastReview.text : '');
-    adapt.disabled = true;
-    const a = await generatePlan(adapt, extra); const b = await generateMeal(adapt, extra);
-    adapt.disabled = false; if (a && b) toast('Τα προγράμματα ενημερώθηκαν', 'success');
+    await generateBoth(adapt, extra);
   });
   function draw() {
     mount(out, state.lastReview && h('div', { class: 'card' }, h('h2', {}, `Αξιολόγηση ${state.lastReview.date}`), md(state.lastReview.text), h('div', { class: 'row' }, adapt)));

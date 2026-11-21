@@ -2,6 +2,7 @@ import { h, spinner, withLoading, toast , mount} from '../ui.js';
 import { state, save, today } from '../store.js';
 import { geminiJSON, textPart } from '../api.js';
 import { SYSTEM, PLAN_PROMPT } from '../prompts.js';
+import { generateBoth } from '../generate.js';
 import { videoBlock, musicBlock } from '../media.js';
 
 export async function generatePlan(btn, extra = '') {
@@ -31,8 +32,8 @@ function exerciseCard(ex, i) {
 export function workoutView(root) {
   const plan = state.plan;
   if (!plan) {
-    const btn = h('button', { class: 'primary' }, '✨ Δημιούργησε πρόγραμμα');
-    btn.addEventListener('click', async () => { if (await generatePlan(btn)) workoutView(root); });
+    const btn = h('button', { class: 'primary' }, '✨ Δημιούργησε πρόγραμμα γυμναστικής & διατροφής');
+    btn.addEventListener('click', async () => { if (await (state.meal ? generatePlan(btn) : generateBoth(btn))) workoutView(root); });
     mount(root, h('h1', {}, 'Πρόγραμμα γυμναστικής'),
       h('div', { class: 'card empty' }, h('div', { class: 'ico' }, '🏋️'),
         h('p', {}, state.profile ? 'Ο coach θα φτιάξει πρόγραμμα με βάση το προφίλ και τους στόχους σου.' : 'Συμπλήρωσε πρώτα το προφίλ σου.'),

@@ -1,6 +1,7 @@
 import { h, withLoading, toast , mount} from '../ui.js';
 import { state, save, today } from '../store.js';
 import { geminiJSON, textPart } from '../api.js';
+import { generateBoth } from '../generate.js';
 import { SYSTEM, MEAL_PROMPT } from '../prompts.js';
 
 export async function generateMeal(btn, extra = '') {
@@ -17,8 +18,8 @@ export async function generateMeal(btn, extra = '') {
 export function nutritionView(root) {
   const m = state.meal;
   if (!m) {
-    const btn = h('button', { class: 'primary' }, '✨ Δημιούργησε πρόγραμμα διατροφής');
-    btn.addEventListener('click', async () => { if (await generateMeal(btn)) nutritionView(root); });
+    const btn = h('button', { class: 'primary' }, state.plan ? '✨ Δημιούργησε πρόγραμμα διατροφής' : '✨ Δημιούργησε πρόγραμμα γυμναστικής & διατροφής');
+    btn.addEventListener('click', async () => { if (await (state.plan ? generateMeal(btn) : generateBoth(btn))) nutritionView(root); });
     mount(root, h('h1', {}, 'Διατροφή'), h('div', { class: 'card empty' }, h('div', { class: 'ico' }, '🥗'),
       h('p', {}, state.profile ? 'Εβδομαδιαίο πλάνο γευμάτων προσαρμοσμένο σε στόχους, αλλεργίες και προτιμήσεις.' : 'Συμπλήρωσε πρώτα το προφίλ σου.'),
       state.profile ? btn : h('a', { class: 'btn primary', href: '#/onboarding' }, 'Προφίλ')));

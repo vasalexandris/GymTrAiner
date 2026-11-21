@@ -2,8 +2,7 @@ import { h, withLoading, toast , mount} from '../ui.js';
 import { state, save, today, uid } from '../store.js';
 import { geminiJSON } from '../api.js';
 import { SYSTEM, MEDICAL_PROMPT } from '../prompts.js';
-import { generatePlan } from './workout.js';
-import { generateMeal } from './nutrition.js';
+import { generateBoth } from '../generate.js';
 
 const MAX = 12 * 1024 * 1024;
 const b64 = file => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.onerror = rej; r.readAsDataURL(file); });
@@ -25,8 +24,7 @@ export function medicalView(root) {
   const apply = h('button', {}, '🔁 Εφάρμοσε τα ευρήματα στα προγράμματα');
   apply.addEventListener('click', async () => {
     const extra = 'Ελήφθησαν υπόψη νέα ιατρικά ευρήματα (δες ενότητα Ιατρικές εξετάσεις). Προσάρμοσε ένταση/ασκήσεις/διατροφή αναλόγως.';
-    apply.disabled = true; const a = await generatePlan(apply, extra); const b = await generateMeal(apply, extra); apply.disabled = false;
-    if (a && b) toast('Τα προγράμματα ενημερώθηκαν', 'success');
+    await generateBoth(apply, extra);
   });
   mount(root, 
     h('h1', {}, 'Ιατρικές εξετάσεις'),
