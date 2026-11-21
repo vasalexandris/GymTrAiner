@@ -117,3 +117,6 @@ svg.chart{width:100%;height:auto}
 .stage .badge,.stage .counter,.stage .caption{pointer-events:none;z-index:2}
 .stage.video .counter{color:#4ade80;text-shadow:0 2px 8px #000a}
 .stage.video .avatar-loading{color:#cbd5e1}
+.video-status{position:absolute;left:50%;top:50px;transform:translateX(-50%);background:rgba(15,23,42,.8);color:#fff;padding:6px 12px;border-radius:999px;font-size:.85rem;z-index:2;pointer-events:none;max-width:90%;text-align:center}
+.video-box iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.seg-box{margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--bg)}

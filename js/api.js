@@ -13,10 +13,10 @@ export function parseJSON(text) {
   }
 }
 
-export async function gemini({ system, contents, json = false, temperature = 0.7, maxTokens = 16384 }) {
+export async function gemini({ system, contents, json = false, temperature = 0.7, maxTokens = 16384, config = {} }) {
   const key = state.settings.geminiKey;
   if (!key) throw new Error('Λείπει το Gemini API key — πρόσθεσέ το στις Ρυθμίσεις.');
-  const body = { contents, generationConfig: { temperature, maxOutputTokens: maxTokens } };
+  const body = { contents, generationConfig: { temperature, maxOutputTokens: maxTokens, ...config } };
   if (system) body.systemInstruction = { parts: [{ text: system }] };
   if (json) body.generationConfig.responseMimeType = 'application/json';
 

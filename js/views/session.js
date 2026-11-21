@@ -7,7 +7,7 @@ import { videoBlock, musicBlock } from '../media.js';
 import { altPanel } from '../alternative.js';
 import { equipmentFor } from '../equipment.js';
 import { getCustomModel } from '../modelstore.js';
-import { ytSearch } from '../api.js';
+import { VideoCoach } from '../videocoach.js';
 
 const JUMP = Symbol('jump'), STOP = Symbol('stop');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -42,14 +42,25 @@ export function sessionView(root) {
 
   const onModelError = e => toast('Δεν φορτώθηκε το 3D μοντέλο — χρησιμοποιώ τον απλό coach. ' + (e?.message || ''), 'error');
   const videoBox = h('div', { class: 'video-box' });
-  let iframe = null, videoList = [], videoIdx = 0, videoFor = '';
-  const ytCmd = func => { try { iframe?.contentWindow?.postMessage(JSON.stringify({ event: 'command', func, args: [] }), '*'); } catch { /* ignore */ } };
-
+  const vStatus = h('div', { class: 'video-status' });
+  let vc = null; // VideoCoach
+  let markStart = null;
+  const segLabel = h('div', { class: 'small' });
+  const updSeg = () => {
+    const sg = vc?.seg;
+    segLabel.textContent = sg ? `🎯 Επανάληψη στο βίντεο: ${sg.start.toFixed(1)}″ → ${sg.end.toFixed(1)}″ (${sg.src === 'ai' ? 'εντοπίστηκε αυτόματα' : 'ορίστηκε από σένα'})${markStart != null ? ` · αρχή σήμανσης ${markStart.toFixed(1)}″` : ''}`
+      : `🎯 Δεν έχει οριστεί ακόμα επανάληψη — το βίντεο παίζει ελεύθερα.${markStart != null ? ` Αρχή σήμανσης: ${markStart.toFixed(1)}″` : ''}`;
+  };
+  const setVStatus = t => { vStatus.textContent = t; vStatus.style.display = t ? '' : 'none'; updSeg(); };
   function makeAvatar() {
-    avatar?.dispose(); avatar = null; videoFor = '';
+    avatar?.dispose(); avatar = null; vc?.destroy(); vc = null; setVStatus('');
     stage.classList.toggle('video', C.view === 'video');
-    if (C.view === 'video') { canvasBox.replaceChildren(); canvasBox.append(videoBox); prepare(); return; }
-    videoBox.replaceChildren(); iframe = null; canvasBox.replaceChildren();
+    if (C.view === 'video') {
+      canvasBox.replaceChildren(videoBox, vStatus);
+      vc = new VideoCoach(videoBox, { onStatus: setVStatus }); vc.setRate(C.speed); vc.pause(paused);
+      prepare(); return;
+    }
+    canvasBox.replaceChildren();
     try {
       if (!webglAvailable()) throw new Error('no webgl');
       const look = C.look === 'custom' && !customModel ? 'real' : C.look;
@@ -59,34 +70,6 @@ export function sessionView(root) {
       console.warn('3D μη διαθέσιμο', e);
       mount(canvasBox, h('div', { class: 'empty' }, h('div', { class: 'ico' }, '🏋️'), h('p', { class: 'muted' }, 'Το 3D animation δεν υποστηρίζεται σε αυτή τη συσκευή· ο coach θα συνεχίσει με φωνή και οδηγίες.')));
     }
-  }
-
-  /** Βίντεο πραγματικού ανθρώπου σε loop (βουβό· μιλάει ο coach) */
-  async function loadVideo(ex, next = false) {
-    if (C.view !== 'video') return;
-    const q = ex.youtube_query || `${ex.name} exercise`;
-    if (videoFor !== q) {
-      videoFor = q; videoList = []; mount(videoBox, h('div', { class: 'avatar-loading' }, '⏳ Βρίσκω βίντεο επίδειξης…'));
-      try { videoList = (await ytSearch(q, { max: 6, short: true })) || []; }
-      catch (e) { toast(e.message, 'error'); }
-      if (videoFor !== q) return; // άλλαξε άσκηση στο μεταξύ
-      if (!videoList.length) {
-        mount(videoBox, h('div', { class: 'avatar-loading' }, state.settings.ytKey ? 'Δεν βρέθηκε βίντεο — δοκίμασε τον 3D coach.' : 'Χρειάζεται YouTube API key (Ρυθμίσεις) για βίντεο μέσα στην εφαρμογή.'));
-        return;
-      }
-      const saved = videoList.findIndex(v => v.id === state.videoPick[ex.name]);
-      videoIdx = saved >= 0 ? saved : 0;
-    } else if (next && videoList.length) {
-      videoIdx = (videoIdx + 1) % videoList.length; state.videoPick[ex.name] = videoList[videoIdx].id; save();
-    }
-    const v = videoList[videoIdx]; if (!v) return;
-    const id = encodeURIComponent(v.id);
-    iframe = h('iframe', {
-      src: `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&mute=1&loop=1&playlist=${id}&controls=0&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3&enablejsapi=1`,
-      allow: 'autoplay; encrypted-media; picture-in-picture', title: v.title, class: 'loop-video',
-    });
-    iframe.addEventListener('load', () => { if (paused) ytCmd('pauseVideo'); });
-    mount(videoBox, iframe, h('div', { class: 'video-credit' }, `▶ ${v.channel}`));
   }
 
   // φωνή + κίνηση στόματος του avatar
@@ -114,12 +97,22 @@ export function sessionView(root) {
       ex.common_mistakes && h('p', {}, h('strong', {}, 'Συχνά λάθη: '), ex.common_mistakes),
       ex.modification && h('p', { class: 'muted small' }, '↪ ' + ex.modification),
       videoBlock(ex), musicBlock(ex, ei),
+      vc && h('div', { class: 'seg-box' }, segLabel,
+        h('div', { class: 'small muted', style: 'margin:4px 0 6px' }, 'Σε κάθε μέτρημα το βίντεο γυρίζει στην αρχή αυτού του τμήματος, ώστε να βλέπεις μία επανάληψη κάθε φορά. Αν δεν είναι σωστό: «Δες ολόκληρο», πάτα «Αρχή» όταν ξεκινά μια επανάληψη και «Τέλος» όταν τελειώνει.'),
+        h('div', { class: 'row' },
+          h('button', { onclick: () => { markStart = null; vc.free(); updSeg(); } }, '▶ Δες ολόκληρο'),
+          h('button', { onclick: () => { markStart = vc.time(); updSeg(); } }, '⏺ Αρχή'),
+          h('button', { onclick: () => { const t = vc.time(); if (markStart == null || t <= markStart + 0.5) return toast('Πάτα πρώτα «Αρχή» και μετά «Τέλος» στο τέλος της επανάληψης', 'error'); vc.setSeg(markStart, t); markStart = null; vc.demo(); updSeg(); toast('Αποθηκεύτηκε η επανάληψη', 'success'); } }, '⏹ Τέλος'),
+          h('button', { onclick: () => vc.demo() }, '🔁 Δοκιμή'),
+          h('button', { onclick: () => vc.autoDetect(true) }, '🤖 Αυτόματα'))),
       h('div', { style: 'margin-top:10px' }, toggle), altBox));
+    updSeg();
   }
 
   function prepare() {
     const ex = day.exercises[ei], mk = inferMotion(ex);
-    avatar?.setMotion(mk); avatar?.setEquipment(equipmentFor(ex, mk)); if (!started) avatar?.ready(); hud(''); drawInfo(); loadVideo(ex);
+    avatar?.setMotion(mk); avatar?.setEquipment(equipmentFor(ex, mk)); if (!started) avatar?.ready(); hud(''); drawInfo();
+    if (vc) { vc.show(ex).then(() => { if (phase === 'ready' || phase === 'intro') vc.demo(); else vc.freeze(); drawInfo(); }); }
   }
 
   function drawControls() {
@@ -136,15 +129,15 @@ export function sessionView(root) {
       btn('⛶', toggleFull),
       h('select', { style: 'width:auto', title: 'Προβολή', onchange: e => { C.view = e.target.value; save(); makeAvatar(); drawControls(); } },
         [['video', '🎬 Βίντεο (πραγματικός άνθρωπος)'], ['3d', '🧍 3D coach']].map(([v, l]) => h('option', { value: v, selected: v === C.view }, l))),
-      C.view === 'video' ? btn('↻ Άλλο βίντεο', () => loadVideo(day.exercises[ei], true)) : null,
+      C.view === 'video' ? btn('↻ Άλλο βίντεο', () => vc?.show(day.exercises[ei], { next: true }).then(() => { vc.demo(); drawInfo(); })) : null,
       btn(C.voice ? '🔊 Φωνή' : '🔇 Φωνή', e => { C.voice = !C.voice; setVoiceEnabled(C.voice); save(); drawControls(); }),
-      h('select', { style: 'width:auto', title: 'Ρυθμός', onchange: e => { C.speed = +e.target.value; save(); } },
+      h('select', { style: 'width:auto', title: 'Ρυθμός', onchange: e => { C.speed = +e.target.value; vc?.setRate(C.speed); save(); } },
         [[1.35, '🐢 Αργός ρυθμός'], [1, '⏱ Κανονικός'], [0.8, '🐇 Γρήγορος']].map(([v, l]) => h('option', { value: v, selected: v === C.speed }, l))),
       btn('Έξοδος', () => { cleanup(); location.hash = '#/workout'; }, 'danger'));
   }
 
   function setPaused(on) {
-    paused = on; avatar?.pause(on); ytCmd(on ? 'pauseVideo' : 'playVideo');
+    paused = on; avatar?.pause(on); vc?.pause(on);
     if (on) cancelSpeech(); 
     if (started) setCaption(on ? '⏸ Παύση' : '▶ Συνεχίζουμε!');
     drawControls();
@@ -176,10 +169,11 @@ export function sessionView(root) {
     ctl.skipIntro = false; phase = 'intro'; set = 1; rep = 0;
     drawInfo(); prepare(); drawControls();
     await say(`${first ? 'Ξεκινάμε! Πρώτη άσκηση' : 'Επόμενη άσκηση'}: ${ex.name}. ${ex.sets} σετ, ${timed ? n + ' δευτερόλεπτα' : n + ' επαναλήψεις'}${perSide ? ' ανά πλευρά' : ''}.`);
+    vc?.demo();
     for (const step of (ex.instructions || []).slice(0, 3)) { if (ctl.skipIntro) break; await say(step); }
     for (set = 1; set <= ex.sets; set++) {
       hud(''); phase = 'count'; drawControls();
-      avatar?.ready();
+      avatar?.ready(); vc?.freeze();
       await say(`Σετ ${set}. Ετοιμάσου!`);
       for (const c of [3, 2, 1]) { hud(c); sp(countWord(c), { interrupt: true }); await wait(0.9); chk(); }
       phase = 'work'; drawControls(); say('Πάμε!', false);
@@ -198,7 +192,7 @@ export function sessionView(root) {
       for (let r = 1; r <= n; r++) {
         rep = r; hud(`${r}/${n}`);
         const alt = perSide ? side : (m.alt && r % 2 === 0);
-        if (avatar) await avatar.cycle(dur, alt); else await wait(dur);
+        if (vc?.canSync()) await vc.rep(wait); else if (avatar) await avatar.cycle(dur, alt); else await wait(dur);
         chk(); await gate();
         let words = countWord(r);
         if (n >= 6 && r === Math.ceil(n / 2) && r !== n) words += ', μισά!';
@@ -207,11 +201,12 @@ export function sessionView(root) {
         setCaption(words); sp(words, { interrupt: true });
       }
     }
+    vc?.freeze();
     await wait(1.2);
   }
 
   async function holdFlow(secs, mk) {
-    avatar?.hold(secs);
+    avatar?.hold(secs); vc?.hold();
     say(`Κράτα! ${secs} δευτερόλεπτα.`, false);
     for (let s = secs; s > 0; s--) {
       hud(s + '″');
@@ -223,7 +218,7 @@ export function sessionView(root) {
   }
 
   async function restFlow(sec, toNext) {
-    phase = 'rest'; drawControls(); avatar?.idle();
+    phase = 'rest'; drawControls(); avatar?.idle(); vc?.freeze();
     say(toNext ? `Μπράβο! Τελειώσαμε την άσκηση. Ξεκούραση ${sec} δευτερόλεπτα.` : `Ωραία! Ξεκούραση ${sec} δευτερόλεπτα.`, false);
     let last = -1;
     await wait(sec, left => {
@@ -264,7 +259,7 @@ export function sessionView(root) {
   }
 
   function cleanup() {
-    ctl.stop = true; cancelSpeech(); avatar?.dispose(); avatar = null;
+    ctl.stop = true; cancelSpeech(); avatar?.dispose(); avatar = null; vc?.destroy(); vc = null;
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     try { wake?.release(); } catch { /* ignore */ }
     document.removeEventListener('visibilitychange', onVis);
