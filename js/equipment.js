@@ -1,6 +1,6 @@
 // Εξοπλισμός & σκηνικά όργανα που κρατά/χρησιμοποιεί ο coach.
 // Ρεαλιστικά PBR υλικά, δυναμικά καμπύλα λάστιχα (zero-GC buffer update),
-// ιμάντες TRX με διακλάδωση Y, Ολυμπιακή μπάρα, πάγκος, σκαλοπάτι και τοίχος.
+// ιμάντες TRX με διακλάδωση Y, Ολυμπιακή μπάρα (δίσκοι 45cm), πάγκος, σκαλοπάτι και τοίχος.
 import * as THREE from './vendor/three.module.min.js';
 
 const RULES = {
@@ -127,6 +127,8 @@ function kettlebell() {
   return shadow(g);
 }
 
+export const BARBELL_PLATE_R = 0.225; // πρότυπη Ολυμπιακή διάμετρος 450mm → ύψος deadlift 22.5cm
+
 function barbell() {
   const g = new THREE.Group();
   const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 1.32, 18), M.knurl());
@@ -141,18 +143,18 @@ function barbell() {
     stop.rotation.z = Math.PI / 2;
     stop.position.x = s * 0.61;
     g.add(stop);
-    // Bumper plates (ακτίνα 0.19m → ταιριάζει με το ύψος deadlift!)
-    const plates = [[0.65, 0.19, 0.040, 0x2563eb], [0.70, 0.155, 0.032, 0xeab308]];
+    // Ολυμπιακοί bumper δίσκοι (ακτίνα 0.225m)
+    const plates = [[0.65, BARBELL_PLATE_R, 0.042, 0x2563eb], [0.70, 0.175, 0.032, 0xeab308]];
     for (const [x, r, w, ringCol] of plates) {
       const p = new THREE.Mesh(new THREE.CylinderGeometry(r, r, w, 32), M.rubber());
       p.rotation.z = Math.PI / 2;
       p.position.x = s * x;
       g.add(p);
-      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.044, 0.044, w + 0.004, 20), M.chrome());
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.046, 0.046, w + 0.004, 20), M.chrome());
       hub.rotation.z = Math.PI / 2;
       hub.position.x = s * x;
       g.add(hub);
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(r * 0.72, 0.004, 8, 28), M.accent(ringCol));
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(r * 0.72, 0.0045, 8, 28), M.accent(ringCol));
       ring.rotation.y = Math.PI / 2;
       ring.position.x = s * (x + s * (w * 0.5 + 0.001));
       g.add(ring);
@@ -222,13 +224,11 @@ class CurvedBand {
     for (let i = 0; i <= this.segs; i++) {
       const u = i / this.segs;
       const om = 1 - u;
-      // P(u) = (1-u)^2 * a + 2(1-u)u * ctrl + u^2 * b
       this._p.set(
         om * om * a.x + 2 * om * u * ctrl.x + u * u * b.x,
         om * om * a.y + 2 * om * u * ctrl.y + u * u * b.y,
         om * om * a.z + 2 * om * u * ctrl.z + u * u * b.z
       );
-      // P'(u) = 2(1-u)(ctrl - a) + 2u(b - ctrl)
       this._t.set(
         2 * om * (ctrl.x - a.x) + 2 * u * (b.x - ctrl.x),
         2 * om * (ctrl.y - a.y) + 2 * u * (b.y - ctrl.y),
@@ -269,15 +269,12 @@ function benchProp() {
   const g = new THREE.Group();
   const steel = M.steel(), leather = M.leather(), rubber = M.rubber();
   const topH = 0.45;
-  // Μαξιλάρι
   const pad = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.065, 0.44), leather);
   pad.position.set(0, topH - 0.0325, 0);
   g.add(pad);
-  // Μεταλλικό πλαίσιο
   const frame = new THREE.Mesh(new THREE.BoxGeometry(0.50, 0.032, 0.36), steel);
   frame.position.set(0, topH - 0.08, 0);
   g.add(frame);
-  // 4 πόδια με αντιολισθητικά πέλματα
   for (const sx of [-0.23, 0.23]) {
     for (const sz of [-0.16, 0.16]) {
       const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.017, 0.017, topH - 0.08, 12), steel);
@@ -319,15 +316,17 @@ function wallPanelProp() {
   return shadow(g);
 }
 
+// Ανεξάρτητα scratch διανύσματα (χωρίς aliasing μεταξύ συναρτήσεων)
 const _tmpD = new THREE.Vector3();
 const _tmpU = new THREE.Vector3(0, 1, 0);
 const _tmpX = new THREE.Vector3(1, 0, 0);
 const _tmpV1 = new THREE.Vector3();
 const _tmpV2 = new THREE.Vector3();
 const _tmpV3 = new THREE.Vector3();
+const _junc = new THREE.Vector3();
+const _ctrl = new THREE.Vector3();
 const _tmpQ = new THREE.Quaternion();
 
-const _junc = new THREE.Vector3();
 function stretchSegment(m, a, b) {
   _tmpD.subVectors(b, a);
   const len = _tmpD.length();
@@ -466,11 +465,11 @@ export class Equipment {
     if (o.bar) {
       if (h.barPos && h.barAxis) {
         o.bar.position.copy(h.barPos);
+        if (o.bar.position.y < BARBELL_PLATE_R) o.bar.position.y = BARBELL_PLATE_R;
         alignX(o.bar, h.barAxis);
       } else {
         o.bar.position.copy(mid);
-        // Προστασία ώστε οι δίσκοι (ακτίνα 0.19m) να μην βυθίζονται κάτω από το πάτωμα
-        if (o.bar.position.y < 0.192) o.bar.position.y = 0.192;
+        if (o.bar.position.y < BARBELL_PLATE_R) o.bar.position.y = BARBELL_PLATE_R;
         alignX(o.bar, across.lengthSq() > 1e-4 ? across : _tmpV1.set(1, 0, 0).applyQuaternion(yawQ));
       }
       if (o.bar.userData.pad) o.bar.userData.pad.visible = !!h.barPad;
@@ -481,41 +480,38 @@ export class Equipment {
         o.bandL.mesh.visible = false;
         o.bandR.mesh.visible = false;
         o.bandH.mesh.visible = true;
-        // Ελαφριά τόξωση μπροστά (μειώνεται όσο τεντώνει το λάστιχο)
         const dist = h.L.pos.distanceTo(h.R.pos);
-        const slack = Math.max(0.015, 0.11 - dist * 0.07);
-        const fwd = _tmpV1.set(0, -slack * 0.35, slack).applyQuaternion(yawQ);
-        const ctrl = _tmpD.copy(mid).add(fwd);
-        o.bandH.update(h.L.pos, ctrl, h.R.pos);
+        const slack = Math.max(0.012, 0.10 - dist * 0.065);
+        const fwd = _tmpV1.set(0, -slack * 0.32, slack).applyQuaternion(yawQ);
+        _ctrl.copy(mid).add(fwd);
+        o.bandH.update(h.L.pos, _ctrl, h.R.pos);
       } else {
         o.bandH.mesh.visible = false;
         o.bandL.mesh.visible = true;
         o.bandR.mesh.visible = true;
-        // Ελαφριά εξωτερική καμπύλωση ανάμεσα στο πέλμα και το χέρι
         const sideL = _tmpV1.set(0.04, 0, 0.03).applyQuaternion(yawQ);
-        const ctrlL = _tmpD.copy(h.feet.L).lerp(h.L.pos, 0.5).add(sideL);
-        o.bandL.update(h.feet.L, ctrlL, h.L.pos);
+        _ctrl.copy(h.feet.L).lerp(h.L.pos, 0.5).add(sideL);
+        o.bandL.update(h.feet.L, _ctrl, h.L.pos);
 
         const sideR = _tmpV1.set(-0.04, 0, 0.03).applyQuaternion(yawQ);
-        const ctrlR = _tmpD.copy(h.feet.R).lerp(h.R.pos, 0.5).add(sideR);
-        o.bandR.update(h.feet.R, ctrlR, h.R.pos);
+        _ctrl.copy(h.feet.R).lerp(h.R.pos, 0.5).add(sideR);
+        o.bandR.update(h.feet.R, _ctrl, h.R.pos);
       }
     }
 
     if (o.straps) {
-      const aLocal = h.trxAnchor || _tmpV1.set(0, 2.45, 1.20);
+      const aLocal = h.trxAnchor || _tmpV1.set(0, 2.42, 1.25);
       const anchor = h.figure.localToWorld(_tmpV2.copy(aLocal));
-      // Κεντρικός κρίκος διακλάδωσης Y 45cm κάτω από το σημείο αγκύρωσης προς τις παλάμες
       const handsMid = _tmpV3.copy(h.L.pos).add(h.R.pos).multiplyScalar(0.5);
-      // ΠΡΟΣΟΧΗ: η stretchSegment χρησιμοποιεί το _tmpD ως scratch → η διακλάδωση χρειάζεται δικό της διάνυσμα
-      const junc = _junc.subVectors(handsMid, anchor).normalize().multiplyScalar(0.45).add(anchor);
+      // Χρήση ανεξάρτητου _junc (η stretchSegment χρησιμοποιεί το _tmpD)
+      _junc.subVectors(handsMid, anchor).normalize().multiplyScalar(0.45).add(anchor);
       o.anchor.position.copy(anchor);
       o.anchor.quaternion.copy(yawQ);
-      o.junction.position.copy(junc);
+      o.junction.position.copy(_junc);
       o.junction.quaternion.copy(yawQ);
-      stretchSegment(o.mainStrap, anchor, junc);
+      stretchSegment(o.mainStrap, anchor, _junc);
       [h.L, h.R].forEach((s, i) => {
-        stretchSegment(o.straps[i], junc, s.pos);
+        stretchSegment(o.straps[i], _junc, s.pos);
         o.handles[i].position.copy(s.pos);
         _tmpV1.copy(s.across);
         if (_tmpV1.lengthSq() < 1e-5) _tmpV1.set(1, 0, 0).applyQuaternion(yawQ);

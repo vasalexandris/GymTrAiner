@@ -1,4 +1,4 @@
-// Βιβλιοθήκη βιομηχανικών κινήσεων για τον 3D coach (πολυφασικά keyframes + επαφές IK).
+// Βιβλιοθήκη βιομηχανικών κινήσεων για τον 3D coach (πολυφασικά keyframes + μεταδεδομένα IK).
 // Συμβάσεις (ο χαρακτήρας κοιτάζει +z, +x = αριστερά του χαρακτήρα):
 //  tx/ty/tz : κάμψη / στροφή / πλάγια κλίση κορμού (tx > 0 = κλίση μπροστά)
 //  hd/hdY/hdZ : κλίση / στροφή / πλάγια κλίση κεφαλής
@@ -45,7 +45,7 @@ export function mirror(p) {
   };
 }
 
-// Βοηθητικός κατασκευαστής τυπικού 5-φασικού κύκλου: A → anticipation → B → pause → follow-through → A
+// Τυπικός 5-φασικός κύκλος: A → anticipation/brace → B → isometric pause → drive back → A
 function phases(A, B, { brace, settle, toB = 0.46, hold = 0.10, easeDown = 'inOut', easeUp = 'out' } = {}) {
   const k = [{ t: 0, p: A }];
   if (brace) k.push({ t: 0.08, p: brace, ease: 'cubic' });
@@ -59,39 +59,42 @@ function phases(A, B, { brace, settle, toB = 0.46, hold = 0.10, easeDown = 'inOu
 // ---- ΒΑΣΙΚΕΣ ΠΟΖΕΣ ----
 const squatA = P({ tx: 0.04, ...arms(-0.18, 0.08, -0.18), ...legs(-0.06, 0.10, 0.05, 0.18) });
 const squatBrace = P({ tx: 0.14, ...arms(-0.48, 0.06, -0.22), ...legs(-0.26, 0.30, 0.07, 0.20) });
-const squatB = P({ tx: 0.48, ...arms(-1.62, 0.06, -0.14), ...legs(-1.42, 1.88, 0.14, 0.22) });
-const squatDeep = P({ tx: 0.50, ...arms(-1.66, 0.06, -0.14), ...legs(-1.46, 1.93, 0.14, 0.22) });
+const squatB = P({ tx: 0.48, ...arms(-1.60, 0.06, -0.14), ...legs(-1.42, 1.88, 0.14, 0.22) });
+const squatDeep = P({ tx: 0.50, ...arms(-1.64, 0.06, -0.14), ...legs(-1.46, 1.93, 0.14, 0.22) });
 
 const backSquatA = P({ tx: 0.06, ...arms(-0.45, 0.85, -1.95), ...legs(-0.06, 0.10, 0.06, 0.22) });
 const backSquatBrace = P({ tx: 0.15, ...arms(-0.48, 0.85, -1.95), ...legs(-0.28, 0.32, 0.08, 0.22) });
 const backSquatB = P({ tx: 0.42, ...arms(-0.52, 0.85, -1.95), ...legs(-1.42, 1.88, 0.15, 0.24) });
 
-const lungeA = P({ tx: 0.03, ...arms(-0.18, 0.09, -0.22), ...legs(-0.03, 0.06, 0.03) });
-const lungeStep = P({ tx: 0.06, rX: 0.03, hlx: -0.55, knL: 0.72, hrx: 0.10, knR: 0.18, slx: 0.10, srx: -0.45, elL: -0.45, elR: -0.65, slz: -0.09, srz: 0.09 });
-const lungeB = P({ tx: 0.08, ty: 0.08, hlx: -1.16, knL: 1.38, hrx: 0.40, knR: 1.20, anR: 0.68, slx: 0.16, srx: -0.58, elL: -0.55, elR: -0.82, slz: -0.10, srz: 0.10 });
+// Προβολές (90°/90° με ανύψωση πέλματος κατά το βήμα και καρφωμένο πόδι στήριξης)
+const lungeA = P({ tx: 0.03, rZ: 0.0, ...arms(-0.16, 0.09, -0.24), ...legs(-0.04, 0.08, 0.03) });
+const lungeStep = P({ tx: 0.06, rX: 0.03, rZ: 0.04, hlx: -0.62, knL: 0.78, hrx: 0.06, knR: 0.18, slx: 0.12, srx: -0.45, elL: -0.48, elR: -0.68, slz: -0.09, srz: 0.09 });
+const lungeB = P({ tx: 0.08, ty: 0.08, rZ: 0.06, hlx: -1.48, knL: 1.56, hrx: 0.18, knR: 1.52, anR: 0.72, slx: 0.18, srx: -0.62, elL: -0.58, elR: -0.88, slz: -0.10, srz: 0.10 });
 
-const revLungeStep = P({ tx: 0.10, rX: -0.03, hlx: -0.35, knL: 0.42, hrx: 0.35, knR: 0.45, slx: 0.10, srx: -0.42, elL: -0.45, elR: -0.75, slz: -0.09, srz: 0.09 });
-const revLungeB = P({ tx: 0.11, ty: 0.08, hlx: -1.14, knL: 1.36, hrx: 0.46, knR: 1.24, anR: 0.72, slx: 0.16, srx: -0.56, elL: -0.55, elR: -0.85, slz: -0.10, srz: 0.10 });
+const revLungeA = P({ tx: 0.03, rZ: 0.16, ...arms(-0.16, 0.09, -0.24), ...legs(-0.04, 0.08, 0.03) });
+const revLungeStep = P({ tx: 0.09, rX: -0.03, rZ: 0.02, hlx: -0.42, knL: 0.48, hrx: 0.34, knR: 0.48, slx: 0.10, srx: -0.44, elL: -0.46, elR: -0.76, slz: -0.09, srz: 0.09 });
+const revLungeB = P({ tx: 0.10, ty: 0.08, rZ: -0.20, hlx: -1.46, knL: 1.54, hrx: 0.22, knR: 1.52, anR: 0.72, slx: 0.18, srx: -0.60, elL: -0.58, elR: -0.88, slz: -0.10, srz: 0.10 });
 
-const hingeA = P({ tx: 0.03, ...arms(-0.08, 0.06, -0.10), ...legs(-0.04, 0.08, 0.03) });
-const hingeBrace = P({ tx: 0.24, ...arms(-0.28, 0.06, -0.10), ...legs(-0.18, 0.20, 0.03) });
-const hingeB = P({ tx: 1.12, hd: 0.14, ...arms(-1.14, 0.06, -0.08), ...legs(-0.48, 0.42, 0.04) });
+// Άρσεις θανάτου με Ολυμπιακή μπάρα (αληθινή κάμψη ισχίου με ευθεία ουδέτερη οσφυϊκή, ύψος 0.225m)
+const dlBot = P({ rrx: 1.06, tx: 0.22, hd: -0.35, ...arms(-1.26, 0.08, -0.05), ...legs(-2.22, 1.46, 0.07, 0.14) });
+const dlPullSlack = P({ rrx: 0.98, tx: 0.18, hd: -0.30, shL: -0.02, shR: -0.02, ...arms(-1.14, 0.08, -0.05), ...legs(-2.12, 1.38, 0.07, 0.14) });
+const dlTop = P({ rrx: 0.0, tx: 0.03, hd: 0.0, shL: -0.015, shR: -0.015, ...arms(-0.06, 0.08, -0.05), ...legs(-0.04, 0.06, 0.05, 0.14) });
 
-const dlBot = P({ tx: 1.00, hd: 0.12, ...arms(-1.04, 0.08, -0.06), ...legs(-0.98, 1.08, 0.07, 0.14) });
-const dlPullSlack = P({ tx: 0.90, hd: 0.08, shL: -0.02, shR: -0.02, ...arms(-0.96, 0.08, -0.06), ...legs(-0.92, 1.02, 0.07, 0.14) });
-const dlTop = P({ tx: 0.03, hd: 0.0, shL: -0.015, shR: -0.015, ...arms(-0.06, 0.08, -0.06), ...legs(-0.04, 0.06, 0.05, 0.14) });
+const hingeA = P({ rrx: 0.0, tx: 0.03, ...arms(-0.08, 0.06, -0.10), ...legs(-0.04, 0.08, 0.03) });
+const hingeBrace = P({ rrx: 0.22, tx: 0.08, ...arms(-0.30, 0.06, -0.10), ...legs(-0.38, 0.20, 0.03) });
+const hingeB = P({ rrx: 1.02, tx: 0.16, hd: -0.25, ...arms(-1.18, 0.06, -0.08), ...legs(-1.46, 0.42, 0.04) });
 
-const rowA = P({ tx: 0.88, hd: 0.08, ...arms(-0.90, 0.08, -0.08), ...legs(-0.46, 0.50, 0.04) });
-const rowB = P({ tx: 0.86, hd: 0.06, shL: 0.02, shR: 0.02, ...arms(0.18, 0.16, -1.48), ...legs(-0.46, 0.50, 0.04) });
+const rowA = P({ rrx: 0.78, tx: 0.14, hd: -0.22, ...arms(-0.92, 0.08, -0.08), ...legs(-1.24, 0.50, 0.04) });
+const rowB = P({ rrx: 0.76, tx: 0.12, hd: -0.20, shL: 0.02, shR: 0.02, ...arms(0.18, 0.16, -1.48), ...legs(-1.22, 0.50, 0.04) });
 
-const bbRowA = P({ tx: 0.86, hd: 0.08, ...arms(-0.88, 0.10, -0.08), ...legs(-0.48, 0.52, 0.05, 0.12) });
-const bbRowB = P({ tx: 0.84, hd: 0.06, shL: 0.02, shR: 0.02, ...arms(0.12, 0.24, -1.42), ...legs(-0.48, 0.52, 0.05, 0.12) });
+const bbRowA = P({ rrx: 0.78, tx: 0.14, hd: -0.22, ...arms(-0.92, 0.10, -0.08), ...legs(-1.28, 0.54, 0.05, 0.12) });
+const bbRowB = P({ rrx: 0.76, tx: 0.12, hd: -0.20, shL: 0.02, shR: 0.02, ...arms(0.14, 0.24, -1.44), ...legs(-1.26, 0.54, 0.05, 0.12) });
 
 const ohpA = P({ tx: 0.02, ...arms(-0.55, 0.36, -2.02), ...legs(-0.04, 0.08, 0.04) });
 const ohpB = P({ tx: 0.01, shL: 0.045, shR: 0.045, ...arms(-2.96, 0.14, -0.08), ...legs(-0.03, 0.06, 0.04) });
 
 const curlA = P({ tx: 0.02, ...arms(-0.06, 0.07, -0.10), ...legs(-0.03, 0.06, 0.03) });
-const curlB = P({ tx: 0.02, ...arms(-0.22, 0.06, -2.38), ...legs(-0.03, 0.06, 0.03) });
+const curlB = P({ tx: 0.02, ...arms(-0.20, 0.06, -2.38), ...legs(-0.03, 0.06, 0.03) });
 
 const latA = P({ tx: 0.04, ...arms(-0.10, 0.10, -0.18), ...legs(-0.04, 0.08, 0.04) });
 const latB = P({ tx: 0.05, shL: 0.02, shR: 0.02, ...arms(-0.20, 1.44, -0.28), ...legs(-0.04, 0.08, 0.04) });
@@ -99,61 +102,63 @@ const latB = P({ tx: 0.05, shL: 0.02, shR: 0.02, ...arms(-0.20, 1.44, -0.28), ..
 const bandA = P({ tx: 0.03, ...arms(-1.52, -0.08, -0.14), ...legs(-0.04, 0.08, 0.04) });
 const bandB = P({ tx: -0.02, shL: 0.02, shR: 0.02, ...arms(-1.42, 1.24, -0.18), ...legs(-0.04, 0.08, 0.04) });
 
-const pushTop = P({ rrx: 1.25, rY: 0.36, rZ: 0.04, tx: 0.02, hd: -0.34, ...arms(-1.25, 0.12, -0.08), ...legs(0.02, 0.05) });
-const pushBrace = P({ rrx: 1.29, rY: 0.33, rZ: 0.04, tx: 0.02, hd: -0.34, ...arms(-1.05, 0.22, -0.32), ...legs(0.02, 0.06) });
-const pushBot = P({ rrx: 1.48, rY: 0.19, rZ: 0.03, tx: 0.02, hd: -0.32, ...arms(-0.34, 0.42, -1.58), ...legs(0.02, 0.06) });
+// Κάμψεις / Σανίδα / Ορειβάτης (ακριβής ευθεία γραμμή σώματος, το IK βαθμονομεί ύψος/θέση βάσει πραγματικού μήκους χεριών)
+const pushTop = P({ rrx: 1.26, rY: 0.34, rZ: 0.02, tx: 0.02, hd: -0.34, ...arms(-1.26, 0.12, -0.08), ...legs(0.02, 0.05) });
+const pushBrace = P({ rrx: 1.30, rY: 0.31, rZ: 0.02, tx: 0.02, hd: -0.34, ...arms(-1.05, 0.22, -0.32), ...legs(0.02, 0.06) });
+const pushBot = P({ rrx: 1.49, rY: 0.17, rZ: 0.02, tx: 0.02, hd: -0.32, ...arms(-0.34, 0.42, -1.58), ...legs(0.02, 0.06) });
 
-const climbA = P({ rrx: 1.25, rY: 0.37, rZ: 0.04, tx: 0.05, hd: -0.32, ...arms(-1.25, 0.10, -0.08), ...legs(0.02, 0.08) });
-const climbB = P({ rrx: 1.25, rY: 0.38, rZ: 0.04, tx: 0.12, ty: 0.10, hd: -0.30, ...arms(-1.25, 0.10, -0.08), hlx: -1.48, knL: 1.78, hrx: 0.06, knR: 0.08 });
+const climbA = P({ rrx: 1.26, rY: 0.35, rZ: 0.02, tx: 0.05, hd: -0.32, ...arms(-1.26, 0.10, -0.08), ...legs(0.02, 0.08) });
+const climbB = P({ rrx: 1.26, rY: 0.36, rZ: 0.02, tx: 0.12, ty: 0.10, hd: -0.30, ...arms(-1.26, 0.10, -0.08), hlx: -1.48, knL: 1.78, hrx: 0.06, knR: 0.08 });
 
-const lie = { rrx: -1.57, rY: 0.14, rZ: 0.08, ...legs(-0.84, 1.98, 0.05) };
-const crunchA = P({ ...lie, tx: 0.02, hd: 0.05, ...arms(-2.05, 0.58, -2.05) });
-const crunchB = P({ ...lie, tx: 0.76, hd: 0.28, ...arms(-1.95, 0.46, -2.05) });
+const lie = { rrx: -1.57, rY: 0.13, rZ: 0.06, ...legs(-0.84, 1.98, 0.05) };
+const crunchA = P({ ...lie, tx: 0.02, hd: 0.05, ...arms(-2.05, 0.72, -2.05) });
+const crunchB = P({ ...lie, tx: 0.76, hd: 0.28, ...arms(-1.95, 0.62, -2.05) });
 
 const bridgeA = P({ ...lie, ...arms(0.04, 0.18, -0.10) });
-const bridgeB = P({ ...lie, rrx: -1.96, rY: 0.36, rZ: 0.06, ...legs(-0.04, 1.72, 0.06), ...arms(0.42, 0.18, -0.10) });
+const bridgeB = P({ ...lie, rrx: -1.96, rY: 0.37, rZ: 0.05, ...legs(-0.04, 1.70, 0.06), ...arms(0.42, 0.18, -0.10) });
 
 const hipThrustA = P({ rrx: -1.06, rY: 0.22, rZ: 0.12, tx: 0.20, hd: 0.34, ...legs(-1.35, 1.88, 0.08), ...arms(-0.62, 0.18, -0.85) });
 const hipThrustB = P({ rrx: -1.56, rY: 0.44, rZ: 0.14, tx: 0.04, hd: 0.42, ...legs(-0.08, 1.56, 0.08), ...arms(-0.18, 0.18, -0.55) });
 
-const deadBugA = P({ rrx: -1.57, rY: 0.14, rZ: 0.04, tx: 0.06, hd: 0.10, ...arms(-1.57, 0.06, -0.08), ...legs(-1.56, 1.56, 0.04) });
-const deadBugB = P({ rrx: -1.57, rY: 0.14, rZ: 0.04, tx: 0.06, hd: 0.10, slx: -2.96, srx: -1.57, slz: -0.08, srz: 0.06, elL: -0.08, elR: -0.08, hlx: -1.56, knL: 1.56, hrx: -0.22, knR: 0.08, hlz: -0.04, hrz: 0.04 });
+const deadBugA = P({ rrx: -1.57, rY: 0.13, rZ: 0.04, tx: 0.06, hd: 0.10, ...arms(-1.57, 0.06, -0.08), ...legs(-1.56, 1.56, 0.04) });
+const deadBugB = P({ rrx: -1.57, rY: 0.13, rZ: 0.04, tx: 0.06, hd: 0.10, slx: -2.94, srx: -1.57, slz: -0.08, srz: 0.06, elL: -0.08, elR: -0.08, hlx: -1.56, knL: 1.56, hrx: -0.24, knR: 0.08, hlz: -0.04, hrz: 0.04 });
 
 const supermanA = P({ rrx: 1.57, rY: 0.12, rZ: 0.0, tx: 0.02, hd: -0.20, ...arms(-2.95, 0.18, -0.12), ...legs(0.02, 0.06, 0.04) });
 const supermanB = P({ rrx: 1.57, rY: 0.13, rZ: 0.0, tx: -0.44, hd: -0.16, ...arms(-2.52, 0.24, -0.14), ...legs(0.36, 0.10, 0.06) });
 
-const sidePlankP = P({ rrx: 0.05, rrz: 1.28, rY: 0.405, rZ: 0.0, tx: 0.02, tz: -0.04, hdZ: -0.15, slx: -0.08, slz: -1.35, elL: -1.48, srx: 0.0, srz: 1.56, elR: -0.08, ...legs(0.0, 0.04, 0.02) });
+const sidePlankP = P({ rrx: 0.04, rrz: 1.38, rY: 0.32, rZ: 0.0, tx: 0.02, tz: -0.04, hdZ: -0.15, slx: -0.08, slz: -1.38, elL: -1.52, srx: 0.0, srz: 1.56, elR: -0.08, ...legs(0.0, 0.04, 0.02) });
 
-const rTwistMid = P({ rrx: -0.78, rY: 0.15, rZ: 0.04, tx: 0.12, ty: 0.0, hd: 0.15, ...arms(-0.92, -0.28, -1.18), ...legs(-1.16, 1.48, 0.04) });
-const rTwistR = P({ rrx: -0.78, rY: 0.15, rZ: 0.04, tx: 0.14, ty: -0.76, hd: 0.15, hdY: -0.35, slx: -0.82, srx: -0.96, slz: 0.36, srz: -0.20, elL: -1.25, elR: -1.10, ...legs(-1.18, 1.50, 0.04) });
-const rTwistL = P({ rrx: -0.78, rY: 0.15, rZ: 0.04, tx: 0.14, ty: 0.76, hd: 0.15, hdY: 0.35, slx: -0.96, srx: -0.82, slz: 0.20, srz: -0.36, elL: -1.10, elR: -1.25, ...legs(-1.18, 1.50, 0.04) });
+const rTwistMid = P({ rrx: -0.78, rY: 0.14, rZ: 0.04, tx: 0.12, ty: 0.0, hd: 0.15, ...arms(-0.92, -0.28, -1.18), ...legs(-1.16, 1.48, 0.04) });
+const rTwistR = P({ rrx: -0.78, rY: 0.14, rZ: 0.04, tx: 0.14, ty: -0.78, hd: 0.15, hdY: -0.35, slx: -0.82, srx: -0.96, slz: 0.36, srz: -0.20, elL: -1.25, elR: -1.10, ...legs(-1.18, 1.50, 0.04) });
+const rTwistL = P({ rrx: -0.78, rY: 0.14, rZ: 0.04, tx: 0.14, ty: 0.78, hd: 0.15, hdY: 0.35, slx: -0.96, srx: -0.82, slz: 0.20, srz: -0.36, elL: -1.10, elR: -1.25, ...legs(-1.18, 1.50, 0.04) });
 
-const stepUpA = P({ tx: 0.04, rZ: -0.04, ...arms(-0.14, 0.08, -0.22), ...legs(-0.04, 0.08, 0.03) });
-const stepUpPlant = P({ tx: 0.18, rZ: 0.18, hlx: -1.12, knL: 1.35, hrx: 0.12, knR: 0.22, slx: 0.18, srx: -0.58, elL: -0.55, elR: -0.88, slz: -0.09, srz: 0.09 });
+// Ανέβασμα σε σκαλοπάτι (εκκίνηση καθαρά πίσω από το κουτί στο z=-0.10, ανέβασμα στο z=0.40)
+const stepUpA = P({ tx: 0.04, rZ: -0.10, ...arms(-0.14, 0.08, -0.22), ...legs(-0.04, 0.08, 0.03) });
+const stepUpPlant = P({ tx: 0.18, rZ: 0.14, hlx: -1.16, knL: 1.40, hrx: 0.12, knR: 0.22, slx: 0.18, srx: -0.58, elL: -0.55, elR: -0.88, slz: -0.09, srz: 0.09 });
 const stepUpTop = P({ tx: 0.04, rY: 0.34, rZ: 0.40, hlx: -0.04, knL: 0.06, hrx: -0.62, knR: 0.78, slx: -0.52, srx: 0.18, elL: -0.85, elR: -0.55, slz: -0.09, srz: 0.09 });
 
-const wallSitP = P({ tx: -0.02, rZ: -0.08, ...arms(-0.22, 0.10, -0.35), ...legs(-1.54, 1.54, 0.06, 0.08) });
+const wallSitP = P({ tx: -0.02, rZ: -0.10, ...arms(-0.22, 0.10, -0.35), ...legs(-1.54, 1.54, 0.06, 0.08) });
 
-const dipTop = P({ rrx: 0.02, rY: 0.43, rZ: 0.02, tx: 0.04, ...arms(0.55, 0.08, -0.14), ...legs(-1.12, 1.12, 0.04) });
-const dipBot = P({ rrx: 0.02, rY: 0.23, rZ: 0.04, tx: 0.08, ...arms(0.95, 0.08, -1.62), ...legs(-1.26, 1.30, 0.04) });
+const dipTop = P({ rrx: 0.02, rY: 0.42, rZ: 0.02, tx: 0.04, ...arms(0.55, 0.08, -0.14), ...legs(-1.12, 1.12, 0.04) });
+const dipBot = P({ rrx: 0.02, rY: 0.22, rZ: 0.04, tx: 0.08, ...arms(0.95, 0.08, -1.62), ...legs(-1.26, 1.30, 0.04) });
 
-const trxRowA = P({ rrx: -0.60, rY: 0.80, rZ: -0.18, tx: 0.02, ...arms(-1.52, 0.08, -0.10), ...legs(0.02, 0.05, 0.04) });
-const trxRowB = P({ rrx: -0.32, rY: 0.90, rZ: 0.02, tx: 0.0, shL: 0.02, shR: 0.02, ...arms(0.52, 0.20, -1.85), ...legs(0.02, 0.05, 0.04) });
+const trxRowA = P({ rrx: -0.58, rY: 0.80, rZ: -0.16, tx: 0.02, ...arms(-1.52, 0.08, -0.10), ...legs(0.02, 0.05, 0.04) });
+const trxRowB = P({ rrx: -0.30, rY: 0.90, rZ: 0.02, tx: 0.0, shL: 0.02, shR: 0.02, ...arms(0.50, 0.20, -1.85), ...legs(0.02, 0.05, 0.04) });
 
 const trxSquatA = P({ tx: -0.04, ...arms(-1.12, 0.08, -0.68), ...legs(-0.08, 0.12, 0.06, 0.18) });
 const trxSquatB = P({ tx: 0.20, ...arms(-1.55, 0.08, -0.12), ...legs(-1.42, 1.88, 0.14, 0.22) });
 
 const trxPressA = P({ rrx: 0.42, rY: 0.86, rZ: 0.10, tx: 0.02, hd: -0.12, ...arms(-1.18, 0.10, -0.12), ...legs(0.02, 0.06, 0.04) });
-const trxPressB = P({ rrx: 0.68, rY: 0.74, rZ: 0.22, tx: 0.02, hd: -0.14, ...arms(-0.42, 0.42, -1.62), ...legs(0.02, 0.06, 0.04) });
+const trxPressB = P({ rrx: 0.66, rY: 0.74, rZ: 0.22, tx: 0.02, hd: -0.14, ...arms(-0.42, 0.42, -1.62), ...legs(0.02, 0.06, 0.04) });
 
-const birdDogA = P({ rrx: 1.38, rY: 0.51, rZ: 0.0, tx: 0.04, hd: -0.24, ...arms(-1.38, 0.06, -0.08), ...legs(-1.38, 1.57, 0.04) });
-const birdDogB = P({ rrx: 1.38, rY: 0.51, rZ: 0.0, tx: 0.02, hd: -0.22, slx: -2.92, srx: -1.38, slz: -0.06, srz: 0.06, elL: -0.08, elR: -0.08, hlx: -1.38, knL: 1.57, hrx: 0.16, knR: 0.06 });
+const birdDogA = P({ rrx: 1.40, rY: 0.46, rZ: 0.0, tx: 0.03, hd: -0.22, ...arms(-1.40, 0.06, -0.08), ...legs(-1.40, 1.57, 0.04) });
+const birdDogB = P({ rrx: 1.40, rY: 0.46, rZ: 0.0, tx: 0.02, hd: -0.20, slx: -2.92, srx: -1.40, slz: -0.06, srz: 0.06, elL: -0.08, elR: -0.08, hlx: -1.40, knL: 1.57, hrx: 0.16, knR: 0.06 });
 
 // Burpee 9-φασικό πρόγραμμα
 const burpeeStand = P({ tx: 0.03, rrx: 0, rY: 0.94, rZ: 0, ...arms(-0.14, 0.08, -0.18), ...legs(-0.05, 0.08, 0.04) });
 const burpeeSquat = P({ tx: 0.62, rrx: 0.14, rY: 0.44, rZ: 0.02, ...arms(-1.05, 0.14, -0.16), ...legs(-1.58, 2.08, 0.12) });
-const burpeePlank = P({ rrx: 1.25, rY: 0.36, rZ: 0.02, tx: 0.02, hd: -0.32, ...arms(-1.25, 0.12, -0.08), ...legs(0.02, 0.06) });
-const burpeePush = P({ rrx: 1.48, rY: 0.19, rZ: 0.02, tx: 0.02, hd: -0.30, ...arms(-0.36, 0.42, -1.56), ...legs(0.02, 0.06) });
+const burpeePlank = P({ rrx: 1.26, rY: 0.34, rZ: 0.02, tx: 0.02, hd: -0.32, ...arms(-1.26, 0.12, -0.08), ...legs(0.02, 0.06) });
+const burpeePush = P({ rrx: 1.49, rY: 0.17, rZ: 0.02, tx: 0.02, hd: -0.30, ...arms(-0.36, 0.42, -1.56), ...legs(0.02, 0.06) });
 const burpeeJump = P({ tx: -0.04, rrx: 0, rY: 1.18, rZ: 0, lift: 0.24, ...arms(-2.96, 0.16, -0.10), ...legs(0.06, 0.06, 0.04), anL: 0.55, anR: 0.55 });
 const burpeeLand = P({ tx: 0.18, rrx: 0, rY: 0.80, rZ: 0, ...arms(-0.42, 0.12, -0.35), ...legs(-0.56, 0.74, 0.06) });
 
@@ -179,11 +184,11 @@ export const MOTIONS = {
     ik: { feet: 'planted', stanceW: 0.34, toeOut: 0.22, hands: 'free', forearmTwist: 0, elbowFlare: 0.35, grip: 'relaxed', spine: 'neutral' },
   },
   lunge: {
-    label: 'Προβολές', tempo: 3.4, prof: [0.48, 0.08, 0.44], yaw: 0.96, alt: true,
+    label: 'Προβολές', tempo: 3.4, prof: [0.48, 0.08, 0.44], yaw: 0.96, alt: true, noZ: true,
     A: lungeA, B: lungeB,
     keys: [
       { t: 0.00, p: lungeA },
-      { t: 0.14, p: lungeStep, ease: 'cubic' },
+      { t: 0.16, p: lungeStep, ease: 'cubic' },
       { t: 0.48, p: lungeB, ease: 'inOut' },
       { t: 0.56, p: lungeB, ease: 'linear' },
       { t: 0.86, p: lungeStep, ease: 'out' },
@@ -195,7 +200,7 @@ export const MOTIONS = {
     label: 'Έλξη ισχίου (RDL)', tempo: 3.4, prof: [0.48, 0.08, 0.44], yaw: 1.0,
     A: hingeA, B: hingeB,
     keys: phases(hingeA, hingeB, { brace: hingeBrace, toB: 0.48, hold: 0.08 }),
-    ik: { feet: 'planted', stanceW: 0.26, toeOut: 0.10, hands: 'free', forearmTwist: -1.25, elbowFlare: 0.25, grip: 'bar', spine: 'neutral' },
+    ik: { feet: 'planted', stanceW: 0.26, toeOut: 0.10, hands: 'hinge_hold', forearmTwist: -1.25, elbowFlare: 0.22, grip: 'bar', spine: 'neutral' },
   },
   row: {
     label: 'Κωπηλατική', tempo: 3.0, prof: [0.40, 0.12, 0.48], yaw: 1.0,
@@ -207,13 +212,13 @@ export const MOTIONS = {
     palm: 'fwd', label: 'Πιέσεις ώμων', tempo: 3.0, prof: [0.42, 0.12, 0.46], yaw: 0.30,
     A: ohpA, B: ohpB,
     keys: phases(ohpA, ohpB, { toB: 0.42, hold: 0.12, easeDown: 'out', easeUp: 'inOut' }),
-    ik: { feet: 'planted', stanceW: 0.28, toeOut: 0.12, hands: 'free', forearmTwist: -1.25, elbowFlare: 0.45, grip: 'dumbbell', spine: 'neutral' },
+    ik: { feet: 'planted', stanceW: 0.28, toeOut: 0.12, hands: 'ohp', forearmTwist: -1.25, elbowFlare: 0.42, grip: 'dumbbell', spine: 'neutral' },
   },
   curl: {
     palm: 'up', label: 'Κάμψεις δικεφάλων', tempo: 3.0, prof: [0.40, 0.12, 0.48], yaw: 0.46,
     A: curlA, B: curlB,
     keys: phases(curlA, curlB, { toB: 0.40, hold: 0.12, easeDown: 'out', easeUp: 'inOut' }),
-    ik: { feet: 'planted', stanceW: 0.24, toeOut: 0.10, hands: 'free', forearmTwist: 1.45, elbowFlare: 0.08, grip: 'dumbbell', spine: 'neutral' },
+    ik: { feet: 'planted', stanceW: 0.24, toeOut: 0.10, hands: 'curl', forearmTwist: 1.45, elbowFlare: 0.06, grip: 'dumbbell', spine: 'neutral' },
   },
   lateral_raise: {
     label: 'Πλάγιες ανυψώσεις', tempo: 3.0, prof: [0.40, 0.12, 0.48], yaw: 0.22,
@@ -257,25 +262,25 @@ export const MOTIONS = {
     palm: 'flat', label: 'Κάμψεις', tempo: 3.0, prof: [0.46, 0.08, 0.46], yaw: 1.25, floor: true, flatFeet: false,
     A: pushTop, B: pushBot,
     keys: phases(pushTop, pushBot, { brace: pushBrace, toB: 0.46, hold: 0.08, easeDown: 'inOut', easeUp: 'out' }),
-    ik: { feet: 'toe', stanceW: 0.24, footZ: -0.80, hands: 'floor', handW: 0.54, handZ: 0.52, forearmTwist: -1.35, elbowFlare: 0.42, grip: 'floor', spine: 'neutral' },
+    ik: { feet: 'toe', stanceW: 0.22, hands: 'floor', handExtraW: 0.11, forearmTwist: -1.35, elbowFlare: 0.42, grip: 'floor', spine: 'neutral' },
   },
   plank: {
     palm: 'flat', label: 'Σανίδα', tempo: 3.0, yaw: 1.25, floor: true, hold: true, flatFeet: false,
     A: pushTop, B: pushTop,
     keys: [{ t: 0, p: pushTop }, { t: 1, p: pushTop }],
-    ik: { feet: 'toe', stanceW: 0.24, footZ: -0.80, hands: 'floor', handW: 0.46, handZ: 0.52, forearmTwist: -1.35, elbowFlare: 0.28, grip: 'floor', spine: 'neutral' },
+    ik: { feet: 'toe', stanceW: 0.22, hands: 'floor', handExtraW: 0.04, forearmTwist: -1.35, elbowFlare: 0.28, grip: 'floor', spine: 'neutral' },
   },
   crunch: {
     label: 'Κοιλιακοί', tempo: 2.5, prof: [0.44, 0.12, 0.44], yaw: 1.25, floor: true,
     A: crunchA, B: crunchB,
     keys: phases(crunchA, crunchB, { toB: 0.44, hold: 0.12, easeDown: 'out', easeUp: 'inOut' }),
-    ik: { feet: 'bridge', stanceW: 0.26, footZ: 0.56, toeOut: 0.08, hands: 'free', forearmTwist: 0.6, elbowFlare: 0.70, grip: 'open', spine: 'flex' },
+    ik: { feet: 'bridge', stanceW: 0.26, toeOut: 0.08, hands: 'free', forearmTwist: 0.6, elbowFlare: 0.70, grip: 'open', spine: 'flex' },
   },
   glute_bridge: {
     label: 'Γέφυρα γλουτών', tempo: 3.0, prof: [0.40, 0.20, 0.40], yaw: 1.25, floor: true,
     A: bridgeA, B: bridgeB,
     keys: phases(bridgeA, bridgeB, { toB: 0.40, hold: 0.20, easeDown: 'out', easeUp: 'inOut' }),
-    ik: { feet: 'bridge', stanceW: 0.28, footZ: 0.56, toeOut: 0.12, hands: 'free', forearmTwist: -1.35, elbowFlare: 0.22, grip: 'open', spine: 'neutral' },
+    ik: { feet: 'bridge', stanceW: 0.28, toeOut: 0.12, hands: 'free', forearmTwist: -1.35, elbowFlare: 0.22, grip: 'open', spine: 'neutral' },
   },
   incline_row: {
     label: 'Κωπηλατική με ιμάντες (TRX)', tempo: 3.0, prof: [0.40, 0.12, 0.48], yaw: 1.15, floor: true,
@@ -288,7 +293,7 @@ export const MOTIONS = {
     palm: 'flat', label: 'Bird-dog (στα τέσσερα)', tempo: 3.4, prof: [0.40, 0.20, 0.40], yaw: 1.22, floor: true, flatFeet: false, alt: true,
     A: birdDogA, B: birdDogB,
     keys: phases(birdDogA, birdDogB, { toB: 0.40, hold: 0.20 }),
-    ik: { feet: 'bird_dog', stanceW: 0.24, hands: 'bird_dog', handW: 0.40, handZ: 0.44, forearmTwist: -1.35, elbowFlare: 0.24, grip: 'floor', spine: 'neutral' },
+    ik: { feet: 'bird_dog', stanceW: 0.22, hands: 'bird_dog', handExtraW: 0.02, forearmTwist: -1.35, elbowFlare: 0.24, grip: 'floor', spine: 'neutral' },
   },
   generic: {
     label: 'Κίνηση άσκησης', tempo: 2.4, yaw: 0.45, alt: true,
@@ -307,7 +312,7 @@ export const MOTIONS = {
       { t: 0.54, p: climbB, ease: 'linear' },
       { t: 1.00, p: climbA, ease: 'inOut' },
     ],
-    ik: { feet: 'mountain_climber', stanceW: 0.24, footZ: -0.80, hands: 'floor', handW: 0.48, handZ: 0.52, forearmTwist: -1.35, elbowFlare: 0.28, grip: 'floor', spine: 'neutral' },
+    ik: { feet: 'mountain_climber', stanceW: 0.22, hands: 'floor', handExtraW: 0.05, forearmTwist: -1.35, elbowFlare: 0.28, grip: 'floor', spine: 'neutral' },
   },
   burpee: {
     palm: 'flat', label: 'Μπέρπι (Burpee)', tempo: 4.0, yaw: 1.15, floor: true, flatFeet: false,
@@ -324,7 +329,7 @@ export const MOTIONS = {
       { t: 0.94, p: burpeeLand, ease: 'in' },
       { t: 1.00, p: burpeeStand, ease: 'cubic' },
     ],
-    ik: { feet: 'burpee', stanceW: 0.28, footZ: -0.80, hands: 'floor_burpee', handW: 0.52, handZ: 0.52, forearmTwist: -1.35, elbowFlare: 0.40, grip: 'floor', spine: 'neutral' },
+    ik: { feet: 'burpee', stanceW: 0.26, hands: 'floor_burpee', handExtraW: 0.09, forearmTwist: -1.35, elbowFlare: 0.40, grip: 'floor', spine: 'neutral' },
   },
   dead_bug: {
     label: 'Νεκρό έντομο (Dead bug)', tempo: 3.4, prof: [0.44, 0.12, 0.44], yaw: 1.25, floor: true, alt: true,
@@ -339,11 +344,11 @@ export const MOTIONS = {
     ik: { feet: 'free', hands: 'free', forearmTwist: -1.25, elbowFlare: 0.30, grip: 'open', spine: 'ext' },
   },
   side_plank: {
-    palm: 'flat', label: 'Πλάγια σανίδα', tempo: 3.0, yaw: 0.35, floor: true, hold: true, flatFeet: false,
+    palm: 'flat', label: 'Πλάγια σανίδα', tempo: 3.0, yaw: 0.32, floor: true, hold: true, flatFeet: false,
     frame: { h: 1.75, w: 2.35, cy: 0.46 },
     A: sidePlankP, B: sidePlankP,
     keys: [{ t: 0, p: sidePlankP }, { t: 1, p: sidePlankP }],
-    ik: { feet: 'side_plank', hands: 'side_plank', forearmTwist: -1.1, elbowFlare: 0.35, grip: 'floor', spine: 'neutral' },
+    ik: { feet: 'side_plank', hands: 'side_plank', forearmTwist: -1.30, elbowFlare: 0.35, grip: 'floor', spine: 'neutral' },
   },
   russian_twist: {
     label: 'Ρωσικές στροφές', tempo: 2.8, yaw: 0.55, floor: true,
@@ -358,18 +363,18 @@ export const MOTIONS = {
       { t: 0.78, p: rTwistL, ease: 'linear' },
       { t: 1.00, p: rTwistMid, ease: 'inOut' },
     ],
-    ik: { feet: 'free', hands: 'free', forearmTwist: 0, elbowFlare: 0.45, grip: 'dumbbell', spine: 'twist' },
+    ik: { feet: 'free', hands: 'russian_twist', forearmTwist: 0, elbowFlare: 0.45, grip: 'dumbbell', spine: 'twist' },
   },
   reverse_lunge: {
-    label: 'Οπίσθιες προβολές', tempo: 3.4, prof: [0.48, 0.08, 0.44], yaw: 0.96, alt: true,
-    A: lungeA, B: revLungeB,
+    label: 'Οπίσθιες προβολές', tempo: 3.4, prof: [0.48, 0.08, 0.44], yaw: 0.96, alt: true, noZ: true,
+    A: revLungeA, B: revLungeB,
     keys: [
-      { t: 0.00, p: lungeA },
-      { t: 0.14, p: revLungeStep, ease: 'cubic' },
+      { t: 0.00, p: revLungeA },
+      { t: 0.16, p: revLungeStep, ease: 'cubic' },
       { t: 0.48, p: revLungeB, ease: 'inOut' },
       { t: 0.56, p: revLungeB, ease: 'linear' },
       { t: 0.86, p: revLungeStep, ease: 'out' },
-      { t: 1.00, p: lungeA, ease: 'cubic' },
+      { t: 1.00, p: revLungeA, ease: 'cubic' },
     ],
     ik: { feet: 'reverse_lunge', stanceW: 0.24, toeOut: 0.05, hands: 'free', forearmTwist: 0, elbowFlare: 0.20, grip: 'relaxed', spine: 'neutral' },
   },
@@ -385,21 +390,21 @@ export const MOTIONS = {
       { t: 0.84, p: stepUpPlant, ease: 'inOut' },
       { t: 1.00, p: stepUpA, ease: 'cubic' },
     ],
-    ik: { feet: 'step_up', stanceW: 0.26, toeOut: 0.06, hands: 'free', forearmTwist: 0, elbowFlare: 0.22, grip: 'relaxed', spine: 'neutral', prop: 'step' },
+    ik: { feet: 'step_up', stanceW: 0.24, toeOut: 0.06, hands: 'free', forearmTwist: 0, elbowFlare: 0.22, grip: 'relaxed', spine: 'neutral', prop: 'step' },
   },
   wall_sit: {
     label: 'Κάθισμα στον τοίχο', tempo: 3.0, yaw: 1.05, hold: true, noZ: true,
     frame: { h: 2.15, w: 1.85, cy: 0.74 },
     A: wallSitP, B: wallSitP,
     keys: [{ t: 0, p: wallSitP }, { t: 1, p: wallSitP }],
-    ik: { feet: 'wall_sit', stanceW: 0.32, footZ: 0.37, toeOut: 0.08, hands: 'free', forearmTwist: 0, elbowFlare: 0.24, grip: 'relaxed', spine: 'neutral', prop: 'wall' },
+    ik: { feet: 'wall_sit', stanceW: 0.30, toeOut: 0.08, hands: 'free', forearmTwist: 0, elbowFlare: 0.24, grip: 'relaxed', spine: 'neutral', prop: 'wall' },
   },
   hip_thrust: {
     label: 'Ωθήσεις ισχίων (Hip thrust)', tempo: 3.0, prof: [0.40, 0.20, 0.40], yaw: 1.22, floor: true,
     frame: { h: 1.85, w: 2.45, cy: 0.46 },
     A: hipThrustA, B: hipThrustB,
     keys: phases(hipThrustA, hipThrustB, { toB: 0.40, hold: 0.20, easeDown: 'out', easeUp: 'inOut' }),
-    ik: { feet: 'hip_thrust', stanceW: 0.34, footZ: 0.60, toeOut: 0.14, hands: 'hip_bar', handW: 0.48, forearmTwist: -1.20, elbowFlare: 0.35, grip: 'bar', spine: 'neutral', prop: 'bench' },
+    ik: { feet: 'hip_thrust', stanceW: 0.32, toeOut: 0.14, hands: 'hip_bar', forearmTwist: -1.20, elbowFlare: 0.35, grip: 'bar', spine: 'neutral', prop: 'bench' },
   },
   deadlift: {
     label: 'Άρσεις θανάτου με μπάρα', tempo: 3.4, prof: [0.42, 0.14, 0.44], yaw: 0.96,
@@ -412,26 +417,26 @@ export const MOTIONS = {
       { t: 0.92, p: dlBot, ease: 'inOut' },
       { t: 1.00, p: dlBot, ease: 'cubic' },
     ],
-    ik: { feet: 'planted', stanceW: 0.28, toeOut: 0.14, hands: 'deadlift_bar', handW: 0.56, forearmTwist: -1.35, elbowFlare: 0.15, grip: 'bar', spine: 'neutral' },
+    ik: { feet: 'planted', stanceW: 0.26, toeOut: 0.14, hands: 'deadlift_bar', forearmTwist: -1.35, elbowFlare: 0.14, grip: 'bar', spine: 'neutral' },
   },
   back_squat: {
     label: 'Καθίσματα με μπάρα στην πλάτη', tempo: 3.2, prof: [0.46, 0.10, 0.44], yaw: 0.85,
     A: backSquatA, B: backSquatB,
     keys: phases(backSquatA, backSquatB, { brace: backSquatBrace, toB: 0.46, hold: 0.10 }),
-    ik: { feet: 'planted', stanceW: 0.36, toeOut: 0.24, hands: 'back_bar', handW: 0.68, forearmTwist: -1.15, elbowFlare: 0.55, grip: 'bar', spine: 'neutral' },
+    ik: { feet: 'planted', stanceW: 0.36, toeOut: 0.24, hands: 'back_bar', forearmTwist: -1.15, elbowFlare: 0.52, grip: 'bar', spine: 'neutral' },
   },
   barbell_row: {
     label: 'Κωπηλατική με μπάρα', tempo: 3.0, prof: [0.40, 0.12, 0.48], yaw: 0.96,
     A: bbRowA, B: bbRowB,
     keys: phases(bbRowA, bbRowB, { toB: 0.40, hold: 0.12, easeDown: 'out', easeUp: 'inOut' }),
-    ik: { feet: 'planted', stanceW: 0.30, toeOut: 0.14, hands: 'row_bar', handW: 0.58, forearmTwist: -1.30, elbowFlare: 0.28, grip: 'bar', spine: 'neutral' },
+    ik: { feet: 'planted', stanceW: 0.30, toeOut: 0.14, hands: 'row_bar', forearmTwist: -1.30, elbowFlare: 0.28, grip: 'bar', spine: 'neutral' },
   },
   triceps_dip: {
     palm: 'flat', label: 'Βυθίσεις τρικεφάλων σε καρέκλα', tempo: 3.0, prof: [0.46, 0.08, 0.46], yaw: 1.15, floor: true,
     frame: { h: 1.95, w: 2.25, cy: 0.52 },
     A: dipTop, B: dipBot,
     keys: phases(dipTop, dipBot, { toB: 0.46, hold: 0.08, easeDown: 'inOut', easeUp: 'out' }),
-    ik: { feet: 'planted', stanceW: 0.26, footZ: 0.66, toeOut: 0.06, hands: 'chair_dip', handW: 0.44, forearmTwist: -1.35, elbowFlare: 0.06, grip: 'chair', spine: 'neutral', prop: 'bench' },
+    ik: { feet: 'planted', stanceW: 0.24, footZ: 0.62, toeOut: 0.06, hands: 'chair_dip', handExtraW: 0.045, forearmTwist: -1.35, elbowFlare: 0.05, grip: 'chair', spine: 'neutral', prop: 'bench' },
   },
   band_pull_apart: {
     label: 'Διάνοιξη λάστιχου', tempo: 2.8, prof: [0.42, 0.14, 0.44], yaw: 0.22,
@@ -444,14 +449,14 @@ export const MOTIONS = {
     frame: { h: 2.70, w: 2.40, cy: 1.15 },
     A: trxSquatA, B: trxSquatB,
     keys: phases(trxSquatA, trxSquatB, { toB: 0.46, hold: 0.10 }),
-    ik: { feet: 'planted', stanceW: 0.34, toeOut: 0.20, hands: 'trx_pull', handW: 0.36, forearmTwist: 0, elbowFlare: 0.26, grip: 'trx', spine: 'neutral' },
+    ik: { feet: 'planted', stanceW: 0.34, toeOut: 0.20, hands: 'trx_pull', handW: 0.34, forearmTwist: 0, elbowFlare: 0.26, grip: 'trx', spine: 'neutral' },
   },
   trx_chest_press: {
     label: 'Πιέσεις στήθους με TRX', tempo: 3.0, prof: [0.46, 0.08, 0.46], yaw: 1.15, floor: true, flatFeet: false,
     frame: { h: 2.70, w: 2.45, cy: 1.15 },
     A: trxPressA, B: trxPressB,
     keys: phases(trxPressA, trxPressB, { toB: 0.46, hold: 0.08, easeDown: 'inOut', easeUp: 'out' }),
-    ik: { feet: 'toe', stanceW: 0.28, footZ: -0.56, hands: 'trx_push', handW: 0.56, forearmTwist: -1.35, elbowFlare: 0.48, grip: 'trx', spine: 'neutral' },
+    ik: { feet: 'toe', stanceW: 0.26, footZ: -0.56, hands: 'trx_push', handExtraW: 0.12, forearmTwist: -1.35, elbowFlare: 0.48, grip: 'trx', spine: 'neutral' },
   },
 };
 

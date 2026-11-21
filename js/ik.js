@@ -1,5 +1,5 @@
 // Αναλυτική αντίστροφη κινηματική (2-bone IK), ορθοκανονική βάση retargeting,
-// όρια αρθρώσεων (ROM) και πολυφασικές καμπύλες keyframes για τον 3D coach.
+// όρια αρθρώσεων (ROM), κατανομή σπονδυλικής στήλης και πολυφασικά keyframes.
 import * as THREE from './vendor/three.module.min.js';
 
 const _Y = new THREE.Vector3(0, 1, 0);
@@ -44,9 +44,9 @@ export function easeValue(t01, ease = 'inOut') {
 }
 
 /**
- * Κατασκευάζει ορθοκανονική βάση (e1, e2, e3) σε quaternion:
+ * Κατασκευάζει ορθοκανονική βάση (e1, e2, e3) σε quaternion (Gram-Schmidt):
  *   e1 = normalize(dir)                                 (κύριος άξονας οστού)
- *   e2 = normalize(sec - (sec · e1) * e1)               (δευτερεύων άξονας, Gram-Schmidt)
+ *   e2 = normalize(sec - (sec · e1) * e1)               (δευτερεύων άξονας)
  *   e3 = e1 × e2                                        (δεξιόστροφος 3ος άξονας)
  * Αν dir || sec, επιλέγεται σταθερός εφεδρικός άξονας χωρίς gimbal flip.
  */
@@ -67,12 +67,14 @@ export function basisFromDirSec(dir, sec, out = new THREE.Quaternion()) {
 }
 
 /**
- * Περιστρέφει ένα δευτερεύον διάνυσμα `sec` γύρω από τον άξονα `axis` (πρηνισμός/υπτιασμός
- * αντιβραχίου ή στροφή βραχιονίου) in-place.
+ * Περιστρέφει ένα δευτερεύον διάνυσμα `sec` γύρω από τον άξονα `axis` in-place
+ * (χρησιμοποιείται για πρηνισμό/υπτιασμό αντιβραχίου και αξονική στροφή βραχιονίου).
  */
 export function applyAxialTwist(sec, axis, angleRad) {
   if (!angleRad) return sec;
-  _e1.copy(axis).normalize();
+  _e1.copy(axis);
+  if (_e1.lengthSq() < 1e-10) return sec;
+  _e1.normalize();
   _qTmp.setFromAxisAngle(_e1, angleRad);
   return sec.applyQuaternion(_qTmp);
 }
@@ -82,39 +84,36 @@ export function applyAxialTwist(sec, axis, angleRad) {
  *
  * Δεδομένα:
  *   A = rootPos (ισχίο ή ώμος), T = targetPos (αστράγαλος ή καρπός),
- *   P = polePos (διάνυσμα/σημείο κατεύθυνσης γονάτου ή αγκώνα),
- *   L1, L2 = μήκη ανώτερου/κατώτερου τμήματος.
+ *   P = polePos (σημείο/διάνυσμα κατεύθυνσης γονάτου ή αγκώνα),
+ *   L1, L2 = μήκη ανώτερου και κατώτερου τμήματος.
  *
  * Μαθηματική παραγωγή:
  *   1. Απόσταση-στόχος d_raw = ||T - A||, μονάδα u = (T - A) / d_raw.
- *   2. Soft-extension clamping (αποτρέπει το απότομο «κλείδωμα/pop» στην πλήρη έκταση):
+ *   2. C1 Soft-extension clamping (εξαλείφει το απότομο «pop» γονάτου/αγκώνα στο κλείδωμα):
  *        d_max  = (L1 + L2) * 0.999
  *        d_soft = d_max * (1 - softness)
  *        Για d_raw > d_soft:
  *          d = d_soft + (d_max - d_soft) * (1 - exp(-(d_raw - d_soft) / (d_max - d_soft)))
- *      Η συνάρτηση είναι C1 συνεχής στο d_soft και παραμένει αυστηρά d < d_max.
+ *      Είναι συνεχής και παραγωγίσιμη (d'(d_soft) = 1) με αυστηρό φράγμα d < d_max.
  *   3. Νόμος συνημιτόνων στο τρίγωνο (A, B, C) με πλευρές L1, L2, d:
  *        cos(α) = clamp((L1² + d² - L2²) / (2·L1·d), -1, 1)
  *        sin(α) = sqrt(max(0, 1 - cos²(α)))
- *      Για τη γωνία β στον τελικό κόμβο C:
  *        cos(β) = clamp((d - L1·cos(α)) / L2, -1, 1)
  *        sin(β) = clamp((L1·sin(α)) / L2, 0, 1)
  *   4. Επίπεδο κάμψης από το pole vector:
  *        n = normalize((P - A) - ((P - A)·u)·u)   (ή poleDir αν poleIsDir=true)
- *   5. Λυμένες θέσεις αρθρώσεων σε world space:
- *        B* = A + L1·(cos(α)·u + sin(α)·n)
- *        C* = A + d·u
- *        dir1 = normalize(B* - A) = cos(α)·u + sin(α)·n
- *        dir2 = normalize(C* - B*) = cos(β)·u - sin(β)·n
- *   6. Κλειστή μορφή κάθετων δευτερευόντων αξόνων στο επίπεδο κάμψης (χωρίς singularities):
- *        p1 = -sin(α)·u + cos(α)·n   (κάθετο στο dir1, πάντα προς +n)
- *        p2 = +sin(β)·u + cos(β)·n   (κάθετο στο dir2, πάντα προς +n)
- *      - Για πόδια: η επιγονατίδα/κνήμη κοιτάζει προς +n → sec1 = +p1, sec2 = +p2.
- *      - Για χέρια: ο αγκώνας προεξέχει προς +n, άρα η πρόσθια πλευρά (δικέφαλος/πτυχωση)
- *        κοιτάζει προς -n → sec1 = -p1, sec2 = -p2.
+ *   5. Λυμένες διευθύνσεις και θέσεις αρθρώσεων σε world space:
+ *        dir1 = cos(α)·u + sin(α)·n,   B* = A + L1·dir1
+ *        dir2 = cos(β)·u - sin(β)·n,   C* = A + d·u
+ *   6. Κλειστή μορφή ορθογώνιων δευτερευόντων αξόνων στο επίπεδο κάμψης (χωρίς singularities):
+ *        p1 = -sin(α)·u + cos(α)·n   (p1 ⊥ dir1, ||p1|| = 1, πάντα προς +n)
+ *        p2 = +sin(β)·u + cos(β)·n   (p2 ⊥ dir2, ||p2|| = 1, πάντα προς +n)
+ *      - Πόδια: επιγονατίδα & πρόσθια κνήμη κοιτάζουν προς +n → sec1 = +p1, sec2 = +p2.
+ *      - Χέρια: ωλέκρανο (αγκώνας) προεξέχει προς +n, άρα η πρόσθια πλευρά (δικέφαλος /
+ *        πτύχωση αγκώνα / αντίχειρας σε ουδέτερη λαβή) κοιτάζει προς -n → sec1 = -p1, sec2 = -p2.
  */
 export function solveTwoBoneIK(rootPos, targetPos, polePos, L1, L2, opts = {}, out = null) {
-  const softness = opts.softness ?? 0.014;
+  const softness = opts.softness ?? 0.015;
   const poleIsDir = !!opts.poleIsDir;
   const minMargin = opts.minMargin ?? 0.02;
 
@@ -169,11 +168,11 @@ export function solveTwoBoneIK(rootPos, targetPos, polePos, L1, L2, opts = {}, o
   const cosB = clamp((d - L1 * cosA) / L2, -1, 1);
   const sinB = clamp((L1 * sinA) / L2, 0, 1);
 
-  // Διευθύνσεις τμημάτων: dir1 = cosA*u + sinA*n, dir2 = cosB*u - sinB*n
+  // Διευθύνσεις τμημάτων
   res.dir1.copy(_u).multiplyScalar(cosA).addScaledVector(_n, sinA).normalize();
   res.dir2.copy(_u).multiplyScalar(cosB).addScaledVector(_n, -sinB).normalize();
 
-  // Κάθετα διανύσματα στο επίπεδο κάμψης (προς +n)
+  // Κλειστής μορφής κάθετοι άξονες στο επίπεδο κάμψης (προς +n)
   res.p1.copy(_u).multiplyScalar(-sinA).addScaledVector(_n, cosA).normalize();
   res.p2.copy(_u).multiplyScalar(sinB).addScaledVector(_n, cosB).normalize();
 
@@ -240,23 +239,22 @@ export function clampPose(p) {
 
 /**
  * Κατανομή κλίσης/κάμψης σπονδυλικής στήλης σε οσφυϊκή (Spine) και θωρακική (Spine1/Spine2) μοίρα:
- * - 'neutral': ασκήσεις φορτίου (squat, deadlift, hinge, row) — η οσφυϊκή παραμένει σταθερή/ουδέτερη,
- *   η κίνηση προέρχεται κυρίως από τα ισχία με ελαφριά θωρακική σταθεροποίηση.
+ * - 'neutral': ασκήσεις φορτίου (squat, deadlift, hinge, row) — braced ουδέτερη οσφυϊκή.
  * - 'flex'   : κοιλιακοί (crunch, dead_bug) — ομαλή τμηματική κάμψη σε όλη τη σπονδυλική.
  * - 'ext'    : εκτάσεις ράχης (superman) — μεγαλύτερη έκταση στη θωρακική, προστατευμένη οσφυϊκή.
- * - 'twist'  : στροφικές (russian_twist) — η στροφή (ty) συγκεντρώνεται κυρίως στη θωρακική μοίρα.
+ * - 'twist'  : στροφικές (russian_twist) — η αξονική στροφή συγκεντρώνεται κυρίως στη θωρακική.
  */
 export function spineDistribution(tx, ty = 0, tz = 0, mode = 'neutral') {
   if (mode === 'flex') {
     return {
-      lumbarX: tx * 0.38, thoracicX: tx * 0.62,
+      lumbarX: tx * 0.36, thoracicX: tx * 0.64,
       lumbarY: ty * 0.25, thoracicY: ty * 0.75,
       lumbarZ: tz * 0.40, thoracicZ: tz * 0.60,
     };
   }
   if (mode === 'ext') {
     return {
-      lumbarX: tx * 0.35, thoracicX: tx * 0.65,
+      lumbarX: tx * 0.34, thoracicX: tx * 0.66,
       lumbarY: ty * 0.20, thoracicY: ty * 0.80,
       lumbarZ: tz * 0.40, thoracicZ: tz * 0.60,
     };
@@ -264,13 +262,13 @@ export function spineDistribution(tx, ty = 0, tz = 0, mode = 'neutral') {
   if (mode === 'twist') {
     return {
       lumbarX: tx * 0.45, thoracicX: tx * 0.55,
-      lumbarY: ty * 0.22, thoracicY: ty * 0.78, // η θωρακική στρέφεται, η οσφυϊκή προστατεύεται
+      lumbarY: ty * 0.22, thoracicY: ty * 0.78,
       lumbarZ: tz * 0.35, thoracicZ: tz * 0.65,
     };
   }
-  // 'neutral' (default): braced lumbar spine — κύρια κλίση στον άξονα του ισχίου/πυέλου
+  // 'neutral': braced lumbar spine — κύρια κλίση από ισχία/λεκάνη με προστατευμένη οσφυϊκή
   return {
-    lumbarX: tx * 0.48, thoracicX: tx * 0.52,
+    lumbarX: tx * 0.46, thoracicX: tx * 0.54,
     lumbarY: ty * 0.20, thoracicY: ty * 0.80,
     lumbarZ: tz * 0.42, thoracicZ: tz * 0.58,
   };
@@ -278,7 +276,7 @@ export function spineDistribution(tx, ty = 0, tz = 0, mode = 'neutral') {
 
 /**
  * Υπολογίζει την πόζα σε χρονική στιγμή t01 ∈ [0, 1] από πολυφασική λίστα keyframes
- * `keys = [{ t, p, ease? }, ...]`. Επιστρέφει νέο αντικείμενο με όλα τα κλειδιά του `allKeys`.
+ * `keys = [{ t, p, ease? }, ...]`.
  */
 export function evalKeyframes(keys, t01, allKeys, mirrorFn = null, out = {}) {
   const t = clamp(t01, 0, 1);

@@ -1,6 +1,6 @@
 // 3D Coach Avatar: σκηνή, 3-point φωτισμός στούντιο/σπιτιού, contact shadows,
-// πολυφασική εκτέλεση κινήσεων με ακριβή χρονισμό (voice sync), αναλυτικό 2-bone IK
-// για καρφωμένα πέλματα & παλάμες, και ενοποίηση με SkinnedCoach & Equipment.
+// πολυφασική εκτέλεση κινήσεων με ακριβή χρονισμό (voice sync), zero-lag αναλυτικό 2-bone IK
+// βαθμονομημένο στις πραγματικές διαστάσεις του μοντέλου, και ενοποίηση με SkinnedCoach & Equipment.
 import * as THREE from './vendor/three.module.min.js';
 import { RoomEnvironment } from './vendor/jsm/environments/RoomEnvironment.js';
 import { EffectComposer } from './vendor/jsm/postprocessing/EffectComposer.js';
@@ -9,14 +9,14 @@ import { GTAOPass } from './vendor/jsm/postprocessing/GTAOPass.js';
 import { OutputPass } from './vendor/jsm/postprocessing/OutputPass.js';
 import { MOTIONS, POSE_KEYS, mirror, sampleCycle } from './motions.js';
 import { loadCoachModel } from './skinned.js';
-import { Equipment } from './equipment.js';
-import { clamp, smootherstep, clampPose, spineDistribution, applyAxialTwist } from './ik.js';
+import { Equipment, BARBELL_PLATE_R } from './equipment.js';
+import { clamp, lerp, smootherstep, clampPose, spineDistribution, applyAxialTwist, solveTwoBoneIK, basisFromDirSec } from './ik.js';
 
 const L = { thigh: 0.45, shin: 0.43, upper: 0.30, fore: 0.27, ankle: 0.07 };
 const KEYS = POSE_KEYS;
 const STAND = Object.fromEntries(KEYS.map(k => [k, 0]));
 
-// Ρυθμός ακολουθίας ανά άρθρωση (μεγαλύτερο = πιο άμεση απόκριση· τα άκρα καθυστερούν ελαφρά → φυσική αδράνεια)
+// Ρυθμός ακολουθίας ανά άρθρωση (τα άκρα καθυστερούν ελαφρά → φυσική αδράνεια)
 const RATE = {
   tx: 24, ty: 22, tz: 22, hd: 12, hdY: 12, hdZ: 12,
   slx: 20, slz: 20, slY: 18, srx: 20, srz: 20, srY: 18,
@@ -26,12 +26,12 @@ const RATE = {
   lift: 32, rrx: 28, rrz: 26, rX: 24, rY: 30, rZ: 30,
 };
 
-// Αντιστοίχιση παλαιού πεδίου palm → στροφή αντιβραχίου (rad): >0 υπτιασμός, <0 πρηνισμός
 const PALM_TO_TWIST = { up: 1.45, fwd: -1.25, flat: -1.35, neutral: 0 };
 
 const _Y = new THREE.Vector3(0, 1, 0);
 const _Z = new THREE.Vector3(0, 0, 1);
 const _X = new THREE.Vector3(1, 0, 0);
+const _DOWN = new THREE.Vector3(0, -1, 0);
 
 export const LOOKS = {
   real:   { name: 'Ρεαλιστική (Michelle)', model: 'assets/models/Michelle.glb', proxy: 'male' },
@@ -138,6 +138,9 @@ function ball(r, material, sx = 1, sy = 1, sz = 1) {
   m.scale.set(sx, sy, sz); m.castShadow = true; return m;
 }
 
+// Rest-basis για τον αόρατο/procedural proxy (όλα τα άκρα κατεβαίνουν κατά -Y με πρόσθιο άξονα +Z)
+const PROXY_REST_INV = basisFromDirSec(new THREE.Vector3(0, -1, 0), _Z, new THREE.Quaternion()).invert();
+
 export class Avatar {
   constructor(container, look = 'real', opts = {}) {
     this.container = container;
@@ -180,12 +183,10 @@ export class Avatar {
     Object.assign(sun.shadow.camera, { left: -1.85, right: 1.85, top: 2.5, bottom: -0.9, near: 0.8, far: 11 });
     this.scene.add(sun);
 
-    // Ψυχρό rim light πίσω-αριστερά για διαχωρισμό σιλουέτας
     const rim = new THREE.DirectionalLight(0xc2d8ff, 1.15);
     rim.position.set(-2.8, 2.7, -2.6);
     this.scene.add(rim);
 
-    // Μαλακό fill light από αριστερά-μπροστά
     const fill = new THREE.DirectionalLight(0xe6f0ff, 0.55);
     fill.position.set(-2.5, 1.9, 2.4);
     this.scene.add(fill);
@@ -235,9 +236,8 @@ export class Avatar {
     this.pt = { a: 0, v: 0, py: 0, pvy: 0 };
     this.tmpV = new THREE.Vector3();
     this._qTmp = new THREE.Quaternion();
+    this._qTmp2 = new THREE.Quaternion();
     this._v1 = new THREE.Vector3();
-    this._v2 = new THREE.Vector3();
-    this._v3 = new THREE.Vector3();
     this._poseScratch = { ...STAND };
 
     this.ro = new ResizeObserver(() => this.resize());
@@ -324,12 +324,10 @@ export class Avatar {
     this.hips = new THREE.Group();
     this.sway.add(this.hips);
 
-    // Πύελος
     const pelvis = ball(0.125, bottom, 1.12 * K.hip, 0.78, 0.84);
     pelvis.position.y = 0.03;
     this.hips.add(pelvis);
 
-    // Κοιλιά + θώρακας (2 τμήματα → φυσική καμπύλη σπονδυλικής)
     this.abdomen = new THREE.Group();
     this.hips.add(this.abdomen);
     const abd = lathe([[0.0, 0.135 * K.hip], [0.11, 0.118 * K.waist], [0.23, 0.128 * K.waist]], top);
@@ -345,7 +343,6 @@ export class Avatar {
     const neck = lathe([[0.27, 0.05], [0.33, 0.042], [0.4, 0.04]], skin, 14);
     this.chest.add(neck);
 
-    // Κεφάλι
     this.headG = new THREE.Group();
     this.headG.position.y = 0.34;
     this.chest.add(this.headG);
@@ -369,7 +366,6 @@ export class Avatar {
     const inner = ball(0.014, dark, 1.2, 0.3, 0.3); inner.position.z = 0.006; inner.name = 'inner';
     this.mouth.add(inner);
 
-    // Μαλλιά
     const cap = new THREE.Mesh(new THREE.SphereGeometry(0.114, 24, 14, 0, Math.PI * 2, 0, Math.PI * (K.ponytail ? 0.56 : 0.5)), hair);
     cap.position.set(0, 0.145, -0.012); cap.rotation.x = -0.5; cap.scale.set(1.0, 1.05, 1.04); cap.castShadow = true;
     this.headG.add(cap);
@@ -382,7 +378,6 @@ export class Avatar {
       this.tail.add(hairTail);
     }
 
-    // Χέρια (aL = -X = ανατομικά Δεξί, aR = +X = ανατομικά Αριστερό)
     const mkArm = side => {
       const sh = new THREE.Group(); sh.position.set(side * 0.205 * K.shoulder, 0.25, 0); this.chest.add(sh);
       sh.add(ball(0.055, top, 1, 1.05, 1));
@@ -399,7 +394,6 @@ export class Avatar {
       return { sh, el, hand };
     };
 
-    // Πόδια
     const mkLeg = side => {
       const hp = new THREE.Group(); hp.position.set(side * 0.1 * K.hip, 0, 0); this.hips.add(hp);
       hp.add(lathe([[-L.thigh, 0.058], [-L.thigh * 0.55, 0.075], [-L.thigh * 0.15, 0.086], [0.0, 0.08]], legMat, 18));
@@ -485,7 +479,6 @@ export class Avatar {
     this.dur = dur;
     this.alt = alt;
     this.repCount++;
-    // Διακριτική μικρο-παραλλαγή ανά επανάληψη (±1.5%) ώστε η κίνηση να μην είναι ρομποτική
     const s = Math.sin(this.repCount * 2.17);
     this.repVar = { depth: 1 + s * 0.014, head: Math.cos(this.repCount * 1.63) * 0.015, sway: s * 0.008 };
     return new Promise(r => { this.resolve = r; });
@@ -499,7 +492,6 @@ export class Avatar {
     return new Promise(r => { this.resolve = r; });
   }
 
-  /** u: 0..1 στο τρέχον στάδιο· διατηρείται για συμβατότητα */
   progress(t01) {
     const [a, h, b] = this.motion.prof || [0.5, 0, 0.5];
     if (t01 < a) return smootherstep(t01 / Math.max(a, 1e-6));
@@ -507,7 +499,6 @@ export class Avatar {
     return 1 - smootherstep(Math.min((t01 - a - h) / Math.max(b, 1e-6), 1));
   }
 
-  /** Παρεμβολή πόζας σε u ∈ [0, 1] μεταξύ A και B (χρησιμοποιείται από debug) */
   pose(u, alt) {
     const m = this.motion;
     const A = alt && m.alt ? mirror(m.A) : m.A;
@@ -528,7 +519,6 @@ export class Avatar {
     if (this.mode === 'cycle') {
       const t01 = clamp(this.t / Math.max(this.dur, 1e-4), 0, 1);
       p = sampleCycle(m, t01, this.alt, { ...this._poseScratch });
-      // Διακριτική μικρο-παραλλαγή επανάληψης & συγχρονισμένη αναπνοή (εκπνοή στην προσπάθεια)
       const phaseBreath = Math.sin(t01 * Math.PI * 2) * 0.010;
       p.tx = (p.tx || 0) * this.repVar.depth + phaseBreath;
       p.hd = (p.hd || 0) + this.repVar.head;
@@ -545,7 +535,6 @@ export class Avatar {
       p.slx = (p.slx || 0) + breath * 0.010;
       p.srx = (p.srx || 0) + breath * 0.010;
     } else {
-      // Φυσική αθλητική στάση αναμονής με ήπια μετατόπιση βάρους
       const shift = Math.sin(this.time * 0.55) * 0.014;
       p = {
         ...STAND,
@@ -579,7 +568,6 @@ export class Avatar {
     } else if (e.dumbbells && legsMove) {
       p.slx = p.srx = -p.tx; p.elL = p.elR = -0.14; p.slz = -0.12; p.srz = 0.12;
     } else if (e.barbell && (m === M2.squat || m === M2.lunge || m === M2.reverse_lunge)) {
-      // Front rack: μπάρα μπροστά στους ώμους (για back_squat χρησιμοποιείται ήδη back_bar IK)
       p.slx = p.srx = -1.45 - p.tx; p.slz = -0.34; p.srz = 0.34; p.elL = p.elR = -2.55;
     } else if (e.kettlebell && m === M2.hinge) {
       p.slz = 0.22; p.srz = -0.22;
@@ -590,7 +578,6 @@ export class Avatar {
 
   loop() {
     this.raf = requestAnimationFrame(this.loop);
-    // real για ακριβή συγχρονισμό φωνής/επανάληψης· dt για σταθερότητα ομαλοποίησης
     const real = this.clock.getDelta();
     const dt = Math.min(real, 0.1);
     if (!this.paused) {
@@ -626,310 +613,555 @@ export class Avatar {
   }
 
   /**
-   * Κατασκευάζει τους παγκόσμιους στόχους 2-Bone IK (πέλματα, pole vectors γονάτων,
-   * παλάμες/λαβές, pole vectors αγκώνων, πρηνισμός/υπτιασμός) για την τρέχουσα πόζα.
+   * Zero-lag επίλυση στόχων 2-Bone IK βαθμονομημένη στις ΠΡΑΓΜΑΤΙΚΕΣ διαστάσεις
+   * του φορτωμένου Mixamo μοντέλου (`sk.dims`) ή του proxy (`L`).
+   * Καλείται ΜΕΣΑ στη `SkinnedCoach.drive()` αμέσως αφού έχει τοποθετηθεί ο κορμός
+   * του τρέχοντος καρέ, ώστε να μην υπάρχει καμία καθυστέρηση καρέ ή απόκλιση αναλογιών.
    */
-  _buildIK(m, cur, sides, wp, ax) {
+  _resolveIK(sk, m, cur, wp, ax, chestUp, chestFwd) {
     const ikSpec = m.ik || {};
     const e = this.equip?.e || {};
-    const dims = this.skinned ? this.skinned.dims : { footHeight: L.ankle, toeHeight: 0.025, toeFwd: 0.13 };
-    const kScale = this.skinned ? this.k : 1;
+    const S = this.look.scale;
+    const dims = sk ? sk.dims : {
+      lenUpLegL: L.thigh * S, lenLegL: L.shin * S,
+      lenUpLegR: L.thigh * S, lenLegR: L.shin * S,
+      lenArmL: L.upper * S, lenForeL: L.fore * S,
+      lenArmR: L.upper * S, lenForeR: L.fore * S,
+      torsoLen: 0.47 * S, palmLen: 0.06 * S,
+      footHeight: L.ankle * S, toeHeight: 0.025 * S, toeFwd: 0.13 * S,
+      hipHalfW: 0.10 * this.look.hip * S, shoulderHalfW: 0.205 * this.look.shoulder * S,
+    };
+
+    const armReach = (dims.lenArmL + dims.lenForeL + dims.lenArmR + dims.lenForeR) * 0.5;
+    const legReach = (dims.lenUpLegL + dims.lenLegL + dims.lenUpLegR + dims.lenLegR) * 0.5;
+    const torsoLen = dims.torsoLen;
+    const shHalfW = dims.shoulderHalfW;
+    const palmLen = dims.palmLen;
+    const kScale = sk ? this.k : 1;
+
     const yaw = this.yaw;
     const rotY = (x, y, z) => new THREE.Vector3(x, y, z).applyAxisAngle(_Y, yaw);
     const dirY = (x, y, z) => new THREE.Vector3(x, y, z).applyAxisAngle(_Y, yaw).normalize();
     const fwdW = dirY(0, 0, 1);
-    const rightW = dirY(1, 0, 0); // +X = αριστερά του χαρακτήρα σε world space
+    const rightW = dirY(1, 0, 0); // +X = αριστερά του χαρακτήρα
 
     const legs = {};
     const arms = {};
+    let hipsPos = null;
+    let groundLock = 'auto';
+
     const meta = {
-      groundLock: 'auto',
       barPos: null, barAxis: null, barPad: false,
       bandMode: ikSpec.hands === 'band_pull' ? 'pull_apart' : 'loop',
-      trxAnchor: null, benchZ: -0.40, stepZ: 0.42, wallZ: -0.20,
+      trxAnchor: null, benchZ: -0.40, stepZ: 0.42, wallZ: -0.22,
     };
 
     if (this.mode === 'idle') {
-      // Σε idle κρατάμε τα πέλματα σταθερά καρφωμένα στο έδαφος (μηδενικό γλίστρημα κατά την ταλάντευση!)
-      const hw = 0.125;
-      for (const [S, sgn] of [['Left', 1], ['Right', -1]]) {
+      const hw = Math.max(dims.hipHalfW + 0.025, 0.12);
+      for (const [Side, sgn] of [['Left', 1], ['Right', -1]]) {
         const toeAng = sgn * 0.12;
         const fDir = dirY(Math.sin(toeAng), 0, Math.cos(toeAng));
         const target = rotY(sgn * hw, dims.footHeight, 0);
         const pole = target.clone().addScaledVector(fDir, 0.55).addScaledVector(_Y, 0.35);
-        legs[S] = { target, pole, mode: 'flat', footDir: fDir, pin: true };
+        legs[Side] = { target, pole, mode: 'flat', footDir: fDir, pin: true };
       }
-      meta.groundLock = 'ik';
-      return { legs, arms, meta };
+      return { legs, arms, hipsPos, groundLock: 'ik', meta };
+    }
+
+    const feetMode = ikSpec.feet || 'free';
+    const handsMode = ikSpec.hands || 'free';
+    const stanceHalf = Math.max(dims.hipHalfW + 0.015, (ikSpec.stanceW || 0.26) * 0.5);
+    const toeOut = ikSpec.toeOut || 0.10;
+    const flare = ikSpec.elbowFlare ?? 0.35;
+    const fTwist = ikSpec.forearmTwist ?? PALM_TO_TWIST[m.palm] ?? 0;
+
+    // ---- 0. ΑΥΤΟ-ΒΑΘΜΟΝΟΜΗΣΗ ΠΥΕΛΟΥ ΓΙΑ ΚΡΙΣΙΜΕΣ ΕΠΑΦΕΣ (PLANK/PUSHUP/DIP/BIRD-DOG/WALL-SIT/SIDE-PLANK) ----
+    let plankToeZ = -0.76;
+    let plankHandZ = 0.46;
+    const isPlankLike = handsMode === 'floor' || (handsMode === 'floor_burpee' && cur.rrx > 0.72);
+
+    if (isPlankLike) {
+      // Άκαμπτη ευθεία σανίδας (τεντωμένα πόδια 99.3% → μηδενικό λύγισμα γονάτων στο στρώμα)
+      // που περιστρέφεται ακριβώς γύρω από τις καρφωμένες μύτες των ποδιών!
+      const rrxTop = 1.26;
+      const dxHand = ikSpec.handExtraW ?? 0.08;
+      // Πυθαγόρειος υπολογισμός μέγιστου κάθετου ύψους ώμου λαμβάνοντας υπόψη το πλάτος παλαμών (dxHand)
+      const maxVertArm = Math.sqrt(Math.max(0.08, (armReach * 0.92) ** 2 - dxHand * dxHand));
+      const maxShY = maxVertArm + 0.032;
+      const hipsYTop = Math.max(0.28, maxShY - torsoLen * Math.cos(rrxTop));
+      const ankleY = dims.toeHeight + 0.105;
+      const legSpan = legReach * 0.975; // ευθεία γραμμή σώματος, με περιθώριο κάτω από το όριο IK (0.99)
+      const dHTop = Math.max(0.04, hipsYTop - ankleY);
+      const horizTop = Math.sqrt(Math.max(0.25, legSpan * legSpan - dHTop * dHTop));
+      plankToeZ = -horizTop * 0.80 - 0.065;
+      const hipsZTop = (plankToeZ + 0.065) + horizTop;
+      // Καρφωμένη θέση παλάμης ακριβώς κάτω από τους ώμους στην κορυφή — ΜΗΔΕΝ γλίστρημα σε όλη την επανάληψη!
+      plankHandZ = hipsZTop + torsoLen * Math.sin(rrxTop) + 0.015;
+
+      const drop01 = clamp((cur.rrx - rrxTop) / 0.23, 0, 1);
+      const hipsYCur = lerp(hipsYTop, 0.21, drop01);
+      const dHCur = Math.max(0.02, hipsYCur - ankleY);
+      const hipsZCur = (plankToeZ + 0.065) + Math.sqrt(Math.max(0.25, legSpan * legSpan - dHCur * dHCur));
+      hipsPos = rotY(cur.rX || 0, hipsYCur, hipsZCur);
+      // Τα πόδια ξεκινούν από την άρθρωση του μηρού (UpLeg), ~10cm πιο κοντά στα πέλματα από το κέντρο της λεκάνης (Hips):
+      // μετακινούμε τις μύτες ισόποσα πίσω ώστε τα πόδια να μένουν τεντωμένα (αλλιώς τα γόνατα έπεφταν στο στρώμα).
+      const hipJoint = this.skinned ? this.skinned.rest.Hips.pos.distanceTo(this.skinned.rest.LeftUpLeg.pos) : 0.08;
+      plankToeZ -= hipJoint * 0.92;
+    } else if (handsMode === 'bird_dog') {
+      // Τετραποδική στάση: ύψος πυέλου ίσο με το ελάχιστο μεταξύ μήκους μηρού και χεριού
+      const tableY = Math.min(dims.lenUpLegL + 0.055, armReach * 0.88 + 0.030);
+      plankHandZ = torsoLen * Math.sin(1.40) + 0.02;
+      hipsPos = rotY(cur.rX || 0, tableY, 0);
+    } else if (handsMode === 'chair_dip') {
+      const benchH = 0.45;
+      const topY = Math.max(0.36, benchH + armReach * 0.87 - torsoLen);
+      const botY = Math.max(0.18, topY - Math.min(0.21, armReach * 0.42));
+      const uDip = clamp((0.42 - (cur.rY || 0.42)) / 0.20, 0, 1);
+      hipsPos = rotY(cur.rX || 0, lerp(topY, botY, uDip), 0.02 + uDip * 0.02);
+    } else if (feetMode === 'wall_sit') {
+      meta.wallZ = -0.22;
+      hipsPos = rotY(0, dims.footHeight + dims.lenLegL * 0.96, -0.10);
+    } else if (feetMode === 'side_plank') {
+      // Ευθεία πλάγια σανίδα (~79° από την κατακόρυφο): κάτω ώμος σε ύψος 0.042 + lenArm, κάτω πέλμα στο έδαφος
+      groundLock = 'ik';
+      const theta = cur.rrz || 1.38;
+      const shH = 0.042 + dims.lenArmR * 0.92;
+      const hipYFromArm = shH - torsoLen * Math.cos(theta) + shHalfW * Math.sin(theta);
+      const hipYFromLeg = 0.055 + legReach * Math.cos(theta) + dims.hipHalfW * Math.sin(theta);
+      hipsPos = rotY(0, Math.max(0.28, Math.min(hipYFromArm, hipYFromLeg)), 0);
+    } else if (handsMode === 'deadlift_bar') {
+      // Αυτο-βαθμονόμηση ύψους πυέλου στις άρσεις θανάτου ώστε οι δίσκοι (r=0.225m)
+      // να ακουμπούν ακριβώς στο πάτωμα στην εκκίνηση, ανεξαρτήτως μήκους χεριών του μοντέλου!
+      const dl01 = clamp(cur.rrx / 1.06, 0, 1);
+      if (dl01 > 0.02) {
+        const torsoAng = (cur.rrx || 0) + (cur.tx || 0) * 0.85;
+        const standY = sk ? sk.hipsRestY : (L.thigh + L.shin + L.ankle) * S;
+        const needShY = BARBELL_PLATE_R + armReach * 0.94 + palmLen * 0.85;
+        const botHipY = clamp(needShY - torsoLen * Math.cos(torsoAng), dims.footHeight + 0.34, standY - 0.15);
+        const curHipY = lerp(standY, botHipY, dl01);
+        const curHipZ = lerp(0, -0.24, dl01);
+        hipsPos = rotY(cur.rX || 0, curHipY, curHipZ);
+      }
+    } else if (feetMode === 'split' || feetMode === 'reverse_lunge') {
+      // Ακριβές βάθος 90°/90° προβολής βαθμονομημένο στο πραγματικό μήκος κνήμης
+      const splitAmt = clamp(Math.abs(cur.hlx - cur.hrx) / 1.55, 0, 1);
+      const standY = sk ? sk.hipsRestY : (L.thigh + L.shin + L.ankle) * S;
+      const lowY = dims.footHeight + dims.lenLegL + 0.055;
+      const yCur = lerp(standY, lowY, smootherstep(splitAmt));
+      const zCur = feetMode === 'reverse_lunge'
+        ? lerp(0.16, -0.20, splitAmt)
+        : lerp(0.00, 0.06, splitAmt);
+      hipsPos = rotY(cur.rX || 0, yCur, zCur);
     }
 
     // ---- 1. IK ΠΟΔΙΩΝ (ΚΑΡΦΩΜΕΝΑ ΠΕΛΜΑΤΑ & ΓΟΝΑΤΑ ΠΑΝΩ ΑΠΟ ΤΑ ΔΑΧΤΥΛΑ) ----
-    const feetMode = ikSpec.feet || 'free';
-    const stanceHalf = (ikSpec.stanceW || 0.26) * 0.5;
-    const toeOut = ikSpec.toeOut || 0.10;
-    const footZ = ikSpec.footZ || 0;
+    let footZ = ikSpec.footZ || 0;
+    if (feetMode === 'wall_sit') footZ = -0.10 + dims.lenUpLegL * 0.96;
+    else if (feetMode === 'bridge') footZ = (cur.rZ || 0.06) + legReach * 0.56;
+    else if (feetMode === 'hip_thrust') footZ = 0.14 + dims.lenUpLegL * 1.02;
 
     if (feetMode === 'planted' || feetMode === 'wall_sit' || feetMode === 'bridge' || feetMode === 'hip_thrust') {
-      meta.groundLock = 'ik';
-      for (const [S, sgn] of [['Left', 1], ['Right', -1]]) {
+      groundLock = 'ik';
+      for (const [Side, sgn] of [['Left', 1], ['Right', -1]]) {
         const ang = sgn * toeOut;
         const fDir = dirY(Math.sin(ang), 0, Math.cos(ang));
         const target = rotY(sgn * stanceHalf, dims.footHeight, footZ);
-        const poleY = (feetMode === 'bridge' || feetMode === 'hip_thrust') ? 0.72 : 0.38;
-        const poleFwd = (feetMode === 'bridge' || feetMode === 'hip_thrust') ? 0.15 : 0.60;
+        const poleY = (feetMode === 'bridge' || feetMode === 'hip_thrust') ? 0.74 : 0.38;
+        const poleFwd = (feetMode === 'bridge' || feetMode === 'hip_thrust') ? 0.15 : 0.62;
         const pole = target.clone().addScaledVector(fDir, poleFwd).addScaledVector(_Y, poleY);
-        legs[S] = { target, pole, mode: 'flat', footDir: fDir, pin: true };
+        legs[Side] = { target, pole, mode: 'flat', footDir: fDir, pin: true };
       }
     } else if (feetMode === 'toe_raise') {
-      meta.groundLock = 'ik';
+      groundLock = 'ik';
       const liftH = Math.max(0, cur.lift * kScale);
-      for (const [S, sgn] of [['Left', 1], ['Right', -1]]) {
+      for (const [Side, sgn] of [['Left', 1], ['Right', -1]]) {
         const ang = sgn * toeOut;
         const fDir = dirY(Math.sin(ang), 0, Math.cos(ang));
         const toePos = rotY(sgn * stanceHalf, dims.toeHeight, footZ + dims.toeFwd);
         const target = rotY(sgn * stanceHalf, dims.footHeight + liftH * 0.88, footZ + liftH * 0.12);
         const pole = target.clone().addScaledVector(fDir, 0.55).addScaledVector(_Y, 0.38);
-        legs[S] = { target, pole, mode: liftH > 0.01 ? 'toe' : 'flat', footDir: fDir, toePos, pin: true };
+        legs[Side] = { target, pole, mode: liftH > 0.01 ? 'toe' : 'flat', footDir: fDir, toePos, pin: true };
       }
     } else if (feetMode === 'toe') {
-      meta.groundLock = 'ik';
-      for (const [S, sgn] of [['Left', 1], ['Right', -1]]) {
-        const toePos = rotY(sgn * stanceHalf, dims.toeHeight, footZ);
-        const target = rotY(sgn * stanceHalf, dims.toeHeight + 0.11, footZ + 0.07);
+      groundLock = 'ik';
+      const tz = isPlankLike ? plankToeZ : (ikSpec.footZ || -0.56);
+      for (const [Side, sgn] of [['Left', 1], ['Right', -1]]) {
+        const toePos = rotY(sgn * stanceHalf, dims.toeHeight, tz);
+        const target = rotY(sgn * stanceHalf, dims.toeHeight + 0.105, tz + 0.065);
         const isProne = cur.rrx > 0.7;
-        const pole = rotY(sgn * stanceHalf, isProne ? 0.06 : 0.45, footZ + 0.45);
-        legs[S] = { target, pole, mode: 'toe', footDir: fwdW, toePos, footUp: _Y, pin: true };
+        const pole = rotY(sgn * stanceHalf, isProne ? 0.05 : 0.45, tz + 0.45);
+        legs[Side] = { target, pole, mode: 'toe', footDir: fwdW, toePos, footUp: _Y, pin: true };
       }
     } else if (feetMode === 'mountain_climber') {
-      meta.groundLock = 'ik';
-      // Το πόδι στήριξης (μικρότερη κάμψη γονάτου) μένει καρφωμένο στις μύτες
+      groundLock = 'ik';
       const pinRight = cur.knL < cur.knR; // lL = Right, lR = Left
       const pinSide = pinRight ? 'Right' : 'Left';
       const sgn = pinSide === 'Left' ? 1 : -1;
-      const toePos = rotY(sgn * stanceHalf, dims.toeHeight, footZ);
-      const target = rotY(sgn * stanceHalf, dims.toeHeight + 0.11, footZ + 0.07);
-      const pole = rotY(sgn * stanceHalf, 0.06, footZ + 0.45);
+      const toePos = rotY(sgn * stanceHalf, dims.toeHeight, plankToeZ);
+      const target = rotY(sgn * stanceHalf, dims.toeHeight + 0.105, plankToeZ + 0.065);
+      const pole = rotY(sgn * stanceHalf, 0.05, plankToeZ + 0.45);
       legs[pinSide] = { target, pole, mode: 'toe', footDir: fwdW, toePos, footUp: _Y, pin: true };
     } else if (feetMode === 'split' || feetMode === 'reverse_lunge') {
-      meta.groundLock = 'ik';
-      // Υπολογίζουμε τα πραγματικά proxy πέλματα και τα «κλειδώνουμε» σε ακριβές y=footHeight/toeHeight
-      // (για reverse_lunge το μπροστινό πέλμα δεν μετακινείται καθόλου!)
-      const frontIsRight = cur.hlx <= cur.hrx; // lL = Right (-X), lR = Left (+X)
-      const splitAmt = clamp(Math.abs(cur.hlx - cur.hrx) / 1.45, 0, 1);
-      for (const [S, sgn] of [['Left', 1], ['Right', -1]]) {
-        const isFront = (S === 'Right') === frontIsRight;
+      groundLock = 'ik';
+      const frontIsRight = cur.hlx <= cur.hrx;
+      const splitAmt = clamp(Math.abs(cur.hlx - cur.hrx) / 1.55, 0, 1);
+      // Παραβολικό τόξο ανύψωσης κατά το βήμα ώστε το πόδι να μην σέρνεται στο πάτωμα!
+      const stepPhase = clamp(splitAmt * 2.2, 0, 1);
+      const liftArc = splitAmt > 0.04 && splitAmt < 0.55 ? Math.sin(stepPhase * Math.PI) * 0.075 : 0;
+
+      for (const [Side, sgn] of [['Left', 1], ['Right', -1]]) {
+        const isFront = (Side === 'Right') === frontIsRight;
         const fDir = dirY(Math.sin(sgn * 0.05), 0, Math.cos(0.05));
         if (feetMode === 'reverse_lunge') {
           if (isFront) {
-            const target = rotY(sgn * stanceHalf, dims.footHeight, 0.02);
-            const pole = target.clone().addScaledVector(fDir, 0.60).addScaledVector(_Y, 0.35);
-            legs[S] = { target, pole, mode: 'flat', footDir: fDir, pin: true };
+            // Μπροστινό πέλμα 100% ΚΑΡΦΩΜΕΝΟ στο έδαφος σε όλη την επανάληψη
+            const target = rotY(sgn * stanceHalf, dims.footHeight, 0.16);
+            const pole = target.clone().addScaledVector(fDir, 0.60).addScaledVector(_Y, 0.36);
+            legs[Side] = { target, pole, mode: 'flat', footDir: fDir, pin: true };
           } else {
-            const backZ = -0.68 * splitAmt;
-            const toePos = rotY(sgn * stanceHalf, dims.toeHeight, backZ + dims.toeFwd * (1 - splitAmt * 0.5));
-            const target = rotY(sgn * stanceHalf, dims.footHeight + splitAmt * 0.06, backZ);
-            const pole = target.clone().addScaledVector(fDir, 0.45).addScaledVector(_Y, 0.20);
-            legs[S] = { target, pole, mode: splitAmt > 0.2 ? 'toe' : 'flat', footDir: fDir, toePos, pin: true };
+            const backZ = lerp(0.16, -0.58, smootherstep(clamp(splitAmt * 1.45, 0, 1)));
+            const isPlanted = splitAmt < 0.05 || splitAmt > 0.48;
+            const toePos = rotY(sgn * stanceHalf, dims.toeHeight + liftArc, backZ + dims.toeFwd * (1 - splitAmt * 0.45));
+            const target = rotY(sgn * stanceHalf, dims.footHeight + splitAmt * 0.075 + liftArc, backZ);
+            const pole = target.clone().addScaledVector(fDir, 0.45).addScaledVector(_Y, 0.18);
+            legs[Side] = { target, pole, mode: splitAmt > 0.22 ? 'toe' : 'flat', footDir: fDir, toePos, pin: isPlanted };
           }
         } else {
-          // Κλασική προβολή μπροστά
+          // Μπροστινή προβολή: πίσω πέλμα καρφωμένο, μπροστινό σηκώνεται σε τόξο και πατάει σταθερά
           if (isFront) {
-            const fwdZ = 0.62 * splitAmt;
-            const target = rotY(sgn * stanceHalf, dims.footHeight, fwdZ);
-            const pole = target.clone().addScaledVector(fDir, 0.60).addScaledVector(_Y, 0.35);
-            legs[S] = { target, pole, mode: 'flat', footDir: fDir, pin: true };
+            const fwdZ = lerp(0.0, 0.44, smootherstep(clamp(splitAmt * 1.45, 0, 1)));
+            const isPlanted = splitAmt < 0.05 || splitAmt > 0.48;
+            const target = rotY(sgn * stanceHalf, dims.footHeight + liftArc, fwdZ);
+            const pole = target.clone().addScaledVector(fDir, 0.60).addScaledVector(_Y, 0.36);
+            legs[Side] = { target, pole, mode: 'flat', footDir: fDir, pin: isPlanted };
           } else {
-            const backZ = -0.10 * splitAmt;
-            const toePos = rotY(sgn * stanceHalf, dims.toeHeight, backZ + dims.toeFwd * (1 - splitAmt * 0.5));
-            const target = rotY(sgn * stanceHalf, dims.footHeight + splitAmt * 0.06, backZ);
-            const pole = target.clone().addScaledVector(fDir, 0.45).addScaledVector(_Y, 0.22);
-            legs[S] = { target, pole, mode: splitAmt > 0.2 ? 'toe' : 'flat', footDir: fDir, toePos, pin: true };
+            const backZ = lerp(0.0, -0.34, smootherstep(clamp(splitAmt * 1.3, 0, 1)));
+            const toePos = rotY(sgn * stanceHalf, dims.toeHeight, backZ + dims.toeFwd * (1 - splitAmt * 0.45));
+            const target = rotY(sgn * stanceHalf, dims.footHeight + splitAmt * 0.075, backZ);
+            const pole = target.clone().addScaledVector(fDir, 0.45).addScaledVector(_Y, 0.18);
+            legs[Side] = { target, pole, mode: splitAmt > 0.22 ? 'toe' : 'flat', footDir: fDir, toePos, pin: true };
           }
         }
       }
     } else if (feetMode === 'step_up') {
-      meta.groundLock = 'ik';
+      groundLock = 'ik';
       meta.stepZ = 0.42;
       const stepH = 0.34;
-      // Καθορισμός ποδιού ανόδου: rY > 0.05 ή μεγάλη κάμψη ισχίου
       const leadIsRight = cur.hlx <= cur.hrx;
-      const onStep = (cur.rY > 0.04) || (Math.abs(cur.hlx - cur.hrx) > 0.45);
-      for (const [S, sgn] of [['Left', 1], ['Right', -1]]) {
-        const isLead = (S === 'Right') === leadIsRight;
+      const prog = clamp((cur.rZ + 0.10) / 0.50, 0, 1);
+      const onStep = prog > 0.22 || cur.rY > 0.04;
+      for (const [Side, sgn] of [['Left', 1], ['Right', -1]]) {
+        const isLead = (Side === 'Right') === leadIsRight;
         const fDir = dirY(Math.sin(sgn * 0.05), 0, Math.cos(0.05));
         if (isLead && onStep) {
-          const target = rotY(sgn * stanceHalf, stepH + dims.footHeight, meta.stepZ);
-          const pole = target.clone().addScaledVector(fDir, 0.55).addScaledVector(_Y, 0.36);
-          legs[S] = { target, pole, mode: 'flat', footDir: fDir, pin: true };
+          // Ομαλό τόξο ανόδου πάνω από το χείλος του κουτιού πριν το πάτημα
+          const plantBlend = clamp((prog - 0.18) / 0.24, 0, 1);
+          const clearArc = plantBlend < 1 ? Math.sin(plantBlend * Math.PI) * 0.08 : 0;
+          const target = rotY(
+            sgn * stanceHalf,
+            lerp(dims.footHeight, stepH + dims.footHeight, smootherstep(plantBlend)) + clearArc,
+            lerp(-0.10, 0.40, smootherstep(plantBlend))
+          );
+          const pole = target.clone().addScaledVector(fDir, 0.56).addScaledVector(_Y, 0.36);
+          legs[Side] = { target, pole, mode: 'flat', footDir: fDir, pin: plantBlend >= 0.95 };
         } else if (!onStep) {
-          const target = rotY(sgn * stanceHalf, dims.footHeight, -0.05);
-          const pole = target.clone().addScaledVector(fDir, 0.55).addScaledVector(_Y, 0.36);
-          legs[S] = { target, pole, mode: 'flat', footDir: fDir, pin: true };
+          const target = rotY(sgn * stanceHalf, dims.footHeight, -0.10);
+          const pole = target.clone().addScaledVector(fDir, 0.56).addScaledVector(_Y, 0.36);
+          legs[Side] = { target, pole, mode: 'flat', footDir: fDir, pin: true };
         }
-        // Το πίσω πόδι κατά την άνοδο μένει ελεύθερο FK ώστε να ανεβαίνει φυσικά πάνω από το κουτί
       }
     } else if (feetMode === 'burpee') {
       if (cur.lift < 0.04 && cur.rrx < 0.38) {
-        meta.groundLock = 'ik';
-        for (const [S, sgn] of [['Left', 1], ['Right', -1]]) {
+        groundLock = 'ik';
+        for (const [Side, sgn] of [['Left', 1], ['Right', -1]]) {
           const fDir = dirY(Math.sin(sgn * 0.14), 0, Math.cos(0.14));
           const target = rotY(sgn * stanceHalf, dims.footHeight, 0);
           const pole = target.clone().addScaledVector(fDir, 0.58).addScaledVector(_Y, 0.36);
-          legs[S] = { target, pole, mode: 'flat', footDir: fDir, pin: true };
+          legs[Side] = { target, pole, mode: 'flat', footDir: fDir, pin: true };
         }
-      } else if (cur.rrx > 0.85) {
-        meta.groundLock = 'ik';
-        for (const [S, sgn] of [['Left', 1], ['Right', -1]]) {
-          const toePos = rotY(sgn * stanceHalf, dims.toeHeight, footZ);
-          const target = rotY(sgn * stanceHalf, dims.toeHeight + 0.11, footZ + 0.07);
-          const pole = rotY(sgn * stanceHalf, 0.06, footZ + 0.45);
-          legs[S] = { target, pole, mode: 'toe', footDir: fwdW, toePos, footUp: _Y, pin: true };
+      } else if (cur.rrx > 0.72) {
+        groundLock = 'ik';
+        for (const [Side, sgn] of [['Left', 1], ['Right', -1]]) {
+          const toePos = rotY(sgn * stanceHalf, dims.toeHeight, plankToeZ);
+          const target = rotY(sgn * stanceHalf, dims.toeHeight + 0.105, plankToeZ + 0.065);
+          const pole = rotY(sgn * stanceHalf, 0.05, plankToeZ + 0.45);
+          legs[Side] = { target, pole, mode: 'toe', footDir: fwdW, toePos, footUp: _Y, pin: true };
         }
       }
     }
 
-    // ---- 2. IK ΧΕΡΙΩΝ (ΕΔΑΦΟΣ, ΚΑΡΕΚΛΑ, ΜΠΑΡΑ, TRX, ΛΑΣΤΙΧΟ, GOBLET) ----
-    const handsMode = ikSpec.hands || 'free';
-    const handHalf = (ikSpec.handW || 0.46) * 0.5;
-    let handZ = ikSpec.handZ ?? 0.55;
-    // Τα χέρια στήριξης μπαίνουν κάτω από τους ΠΡΑΓΜΑΤΙΚΟΥΣ ώμους του μοντέλου (ο proxy έχει άλλες αναλογίες κορμού)
-    if (this.skinned && (handsMode === 'floor' || handsMode === 'floor_burpee' || handsMode === 'bird_dog')) {
-      const sk = this.skinned, shZ = (sk.worldPos('LeftArm').dot(fwdW) + sk.worldPos('RightArm').dot(fwdW)) * 0.5;
-      const want = shZ + (ikSpec.handZoff ?? 0.03);
-      this._handZ = this._handZ == null || Math.abs(this._handZ - want) > 0.6 ? want : this._handZ + (want - this._handZ) * 0.25;
-      handZ = this._handZ;
-    } else this._handZ = null;
-    const flare = ikSpec.elbowFlare ?? 0.35;
-    const fTwist = ikSpec.forearmTwist ?? PALM_TO_TWIST[m.palm] ?? 0;
+    // ---- 2. IK ΧΕΡΙΩΝ (ΥΠΟΛΟΓΙΣΜΟΣ ΠΑΝΩ ΣΤΙΣ ΠΡΑΓΜΑΤΙΚΕΣ ΤΡΕΧΟΥΣΕΣ ΘΕΣΕΙΣ ΩΜΩΝ/ΑΥΧΕΝΑ) ----
+    const computeArms = (coach, targetIK) => {
+      const aOut = targetIK ? targetIK.arms : arms;
+      const getShL = () => coach ? coach.worldPos('LeftArm') : wp(this.aR.sh);
+      const getShR = () => coach ? coach.worldPos('RightArm') : wp(this.aL.sh);
+      const getShMid = () => getShL().add(getShR()).multiplyScalar(0.5);
 
-    if (handsMode === 'floor' || (handsMode === 'floor_burpee' && cur.rrx > 0.55)) {
-      meta.groundLock = 'ik';
-      const downW = new THREE.Vector3(0, -1, 0);
-      for (const [S, sgn] of [['Left', 1], ['Right', -1]]) {
-        const target = rotY(sgn * handHalf, 0.036, handZ);
-        // Αγκώνες στις ~38°-45° πίσω-έξω (όχι 90° chicken-wing!)
-        const pole = rotY(sgn * (handHalf + 0.38 * flare), 0.30, handZ - 0.52);
-        arms[S] = {
-          target, pole,
+      const handHalf = ikSpec.handExtraW !== undefined
+        ? (shHalfW + ikSpec.handExtraW)
+        : ((ikSpec.handW || (shHalfW * 2 + 0.10)) * 0.5);
+
+      if (isPlankLike) {
+        groundLock = 'ik';
+        // Ο καρπός μετατοπίζεται -palmLen*0.35 πίσω ώστε το κέντρο της παλάμης να πατάει ακριβώς κάτω από τον ώμο
+        const wristZ = plankHandZ - palmLen * 0.35;
+        for (const [Side, sgn] of [['Left', 1], ['Right', -1]]) {
+          const target = rotY(sgn * handHalf, 0.030, wristZ);
+          const pole = rotY(sgn * (handHalf + 0.38 * flare), 0.28, wristZ - 0.50);
+          aOut[Side] = {
+            target, pole,
+            forearmTwist: -1.35, humeralTwist: 0.16,
+            handDir: fwdW.clone(), handPalm: _DOWN, pinFloor: true,
+          };
+        }
+      } else if (handsMode === 'bird_dog') {
+        groundLock = 'ik';
+        const wristZ = plankHandZ - palmLen * 0.35;
+        const leftPlanted = cur.srx > -2.1;
+        const rightPlanted = cur.slx > -2.1;
+        if (leftPlanted) {
+          const target = rotY(handHalf, 0.030, wristZ);
+          const pole = rotY(handHalf + 0.10, 0.30, wristZ - 0.48);
+          aOut.Left = { target, pole, forearmTwist: -1.35, handDir: fwdW.clone(), handPalm: _DOWN, pinFloor: true };
+        }
+        if (rightPlanted) {
+          const target = rotY(-handHalf, 0.030, wristZ);
+          const pole = rotY(-handHalf - 0.10, 0.30, wristZ - 0.48);
+          aOut.Right = { target, pole, forearmTwist: -1.35, handDir: fwdW.clone(), handPalm: _DOWN, pinFloor: true };
+        }
+      } else if (handsMode === 'side_plank') {
+        // Κάτω χέρι (Right) σε 2-bone IK: αγκώνας ακριβώς κάτω από τον ώμο στο στρώμα, αντιβράχιο μπροστά!
+        const shR = getShR();
+        const elbowOnMat = new THREE.Vector3(shR.x, 0.042, shR.z);
+        const wristTgt = elbowOnMat.clone().addScaledVector(fwdW, dims.lenForeR * 0.94);
+        const pole = elbowOnMat.clone().addScaledVector(_Y, -0.45).addScaledVector(fwdW, -0.35);
+        aOut.Right = {
+          target: wristTgt, pole,
           forearmTwist: -1.35,
-          humeralTwist: 0.18,
-          handDir: fwdW.clone(),
-          handPalm: downW,
+          handDir: fwdW.clone(), handPalm: _DOWN, pinFloor: true,
         };
-      }
-    } else if (handsMode === 'bird_dog') {
-      meta.groundLock = 'ik';
-      const downW = new THREE.Vector3(0, -1, 0);
-      // Το χέρι στήριξης έχει slx/srx > -2.0 (το εκτεταμένο είναι ~ -2.92)
-      const leftPlanted = cur.srx > -2.1; // aR = Left
-      const rightPlanted = cur.slx > -2.1; // aL = Right
-      if (leftPlanted) {
-        const target = rotY(handHalf, 0.036, handZ);
-        const pole = rotY(handHalf + 0.12, 0.32, handZ - 0.48);
-        arms.Left = { target, pole, forearmTwist: -1.35, handDir: fwdW.clone(), handPalm: downW };
-      }
-      if (rightPlanted) {
-        const target = rotY(-handHalf, 0.036, handZ);
-        const pole = rotY(-handHalf - 0.12, 0.32, handZ - 0.48);
-        arms.Right = { target, pole, forearmTwist: -1.35, handDir: fwdW.clone(), handPalm: downW };
-      }
-    } else if (handsMode === 'chair_dip') {
-      meta.groundLock = 'ik';
-      meta.benchZ = -0.40;
-      const edgeZ = -0.18; // πρόσθια ακμή πάγκου (benchZ + 0.22)
-      const downW = new THREE.Vector3(0, -1, 0);
-      for (const [S, sgn] of [['Left', 1], ['Right', -1]]) {
-        const target = rotY(sgn * handHalf, 0.468, edgeZ);
-        // Αγκώνες αυστηρά ΠΙΣΩ (όχι άνοιγμα στα πλάγια!)
-        const pole = rotY(sgn * (handHalf + 0.05), 0.62, edgeZ - 0.65);
-        arms[S] = {
-          target, pole,
-          forearmTwist: -1.35,
-          handDir: fwdW.clone(),
-          handPalm: downW,
-        };
-      }
-    } else if (handsMode === 'back_bar') {
-      // Μπάρα ακριβώς πάνω στους άνω τραπεζοειδείς (πίσω από τον αυχένα, μηδέν clipping!)
-      // Στο ρεαλιστικό μοντέλο: πραγματική θέση αυχένα (ο proxy έχει μακρύτερο κορμό → η μπάρα έβγαινε πάνω από το κεφάλι)
-      const shMid = this.skinned
-        ? this.skinned.worldPos('Neck').lerp(this.skinned.worldPos('Spine2'), 0.3).addScaledVector(fwdW, -0.075)
-        : wp(this.chest, 0, 0.27, -0.105).multiplyScalar(kScale);
-      const barAxis = rightW.clone();
-      meta.barPos = shMid.clone();
-      meta.barAxis = barAxis;
-      const gripHalf = (ikSpec.handW || 0.68) * 0.5;
-      for (const [S, sgn] of [['Left', 1], ['Right', -1]]) {
-        const target = shMid.clone().addScaledVector(barAxis, sgn * gripHalf);
-        const pole = target.clone().addScaledVector(_Y, -0.48).addScaledVector(fwdW, -0.35).addScaledVector(barAxis, sgn * 0.14);
-        arms[S] = { target, pole, forearmTwist: -1.15, humeralTwist: 0.45 };
-      }
-    } else if (handsMode === 'deadlift_bar' || handsMode === 'row_bar') {
-      // Συμμετρική μπάρα: τα δύο χέρια κλειδώνουν στο ακριβές πλάτος λαβής πάνω στον άξονα της μπάρας
-      const barAxis = rightW.clone();
-      const gripHalf = (ikSpec.handW || 0.56) * 0.5;
-      const aLHand = wp(this.aL.el, 0, -L.fore, 0).multiplyScalar(kScale);
-      const aRHand = wp(this.aR.el, 0, -L.fore, 0).multiplyScalar(kScale);
-      const midH = aLHand.add(aRHand).multiplyScalar(0.5);
-      if (handsMode === 'deadlift_bar') {
-        // Κατακόρυφη διαδρομή μπάρας πάνω από το μέσο του πέλματος (z ≈ 0.16), ποτέ κάτω από 0.195m!
-        const barZ = 0.16;
-        const barY = Math.max(0.20, midH.y);
-        meta.barPos = rotY(0, barY, barZ);
-      } else {
-        meta.barPos = midH.clone();
-        if (meta.barPos.y < 0.22) meta.barPos.y = 0.22;
-      }
-      meta.barAxis = barAxis;
-      for (const [S, sgn] of [['Left', 1], ['Right', -1]]) {
-        const target = meta.barPos.clone().addScaledVector(barAxis, sgn * gripHalf);
-        const pole = target.clone().addScaledVector(fwdW, -0.45).addScaledVector(_Y, 0.35).addScaledVector(barAxis, sgn * 0.18 * flare);
-        arms[S] = { target, pole, forearmTwist: fTwist };
-      }
-    } else if (handsMode === 'hip_bar') {
-      meta.benchZ = -0.52;
-      if (e.barbell) {
-        const hipsW = wp(this.hips, 0, 0.06, 0.11).multiplyScalar(kScale);
+      } else if (handsMode === 'chair_dip') {
+        groundLock = 'ik';
+        meta.benchZ = -0.40;
+        const edgeZ = -0.18;
+        const wristZ = edgeZ - palmLen * 0.32;
+        for (const [Side, sgn] of [['Left', 1], ['Right', -1]]) {
+          const target = rotY(sgn * handHalf, 0.468, wristZ);
+          // Αγκώνες αυστηρά ΠΙΣΩ πάνω από τον πάγκο (όχι άνοιγμα στα πλάγια!)
+          const pole = rotY(sgn * (handHalf + 0.03), 0.62, edgeZ - 0.68);
+          aOut[Side] = {
+            target, pole,
+            forearmTwist: -1.35,
+            handDir: fwdW.clone(), handPalm: _DOWN,
+          };
+        }
+      } else if (handsMode === 'back_bar') {
+        // Zero-lag θέση άνω τραπεζοειδών: Spine2↔Neck πίσω κατά -chestFwd*0.085 (ακολουθεί κάθε κλίση κορμού!)
+        const barPos = coach
+          ? coach.worldPos('Spine2').lerp(coach.worldPos('Neck'), 0.62).addScaledVector(chestFwd, -0.085).addScaledVector(chestUp, 0.015)
+          : wp(this.chest, 0, 0.27, -0.105);
         const barAxis = rightW.clone();
-        meta.barPos = hipsW.clone();
+        meta.barPos = barPos.clone();
         meta.barAxis = barAxis;
-        meta.barPad = true;
-        for (const [S, sgn] of [['Left', 1], ['Right', -1]]) {
-          const target = hipsW.clone().addScaledVector(barAxis, sgn * 0.24);
-          const pole = target.clone().addScaledVector(_Y, -0.22).addScaledVector(barAxis, sgn * 0.25);
-          arms[S] = { target, pole, forearmTwist: -1.20 };
+        const gripHalf = shHalfW + 0.18;
+        for (const [Side, sgn] of [['Left', 1], ['Right', -1]]) {
+          const target = barPos.clone()
+            .addScaledVector(barAxis, sgn * gripHalf)
+            .addScaledVector(chestUp, -palmLen * 0.45)
+            .addScaledVector(chestFwd, -palmLen * 0.25);
+          const pole = target.clone()
+            .addScaledVector(chestUp, -0.46)
+            .addScaledVector(chestFwd, -0.34)
+            .addScaledVector(barAxis, sgn * 0.14);
+          aOut[Side] = { target, pole, forearmTwist: -1.15, humeralTwist: 0.45 };
+        }
+      } else if (handsMode === 'deadlift_bar') {
+        // Κατακόρυφη διαδρομή Ολυμπιακής μπάρας (0.225m δίσκοι) πάνω από το μέσο του πέλματος, χέρια έξω από τα γόνατα!
+        const shMid = getShMid();
+        const barAxis = rightW.clone();
+        const gripHalf = Math.max(stanceHalf + 0.08, shHalfW + 0.06);
+        const barY = clamp(shMid.y - armReach * 0.94 - palmLen * 0.85, BARBELL_PLATE_R, shMid.y - armReach * 0.88);
+        const barPos = rotY(0, barY, 0.15);
+        meta.barPos = barPos.clone();
+        meta.barAxis = barAxis;
+        for (const [Side, sgn] of [['Left', 1], ['Right', -1]]) {
+          const target = barPos.clone()
+            .addScaledVector(barAxis, sgn * gripHalf)
+            .addScaledVector(_Y, palmLen * 0.85); // ο καρπός πάνω από τη μπάρα ώστε τα δάχτυλα να την αγκαλιάζουν!
+          const pole = target.clone().addScaledVector(fwdW, -0.45).addScaledVector(_Y, 0.35).addScaledVector(barAxis, sgn * 0.06);
+          aOut[Side] = { target, pole, forearmTwist: -1.35 };
+        }
+      } else if (handsMode === 'row_bar') {
+        const shMid = getShMid();
+        const barAxis = rightW.clone();
+        const gripHalf = shHalfW + 0.10;
+        const pull01 = clamp((-cur.elL - 0.10) / 1.35, 0, 1);
+        const dropY = lerp(armReach * 0.92, armReach * 0.40, pull01);
+        const fwdOff = lerp(0.06, -0.06, pull01);
+        const barPos = shMid.clone().addScaledVector(_Y, -dropY).addScaledVector(fwdW, fwdOff);
+        if (barPos.y < BARBELL_PLATE_R) barPos.y = BARBELL_PLATE_R;
+        meta.barPos = barPos.clone();
+        meta.barAxis = barAxis;
+        for (const [Side, sgn] of [['Left', 1], ['Right', -1]]) {
+          const target = barPos.clone().addScaledVector(barAxis, sgn * gripHalf).addScaledVector(_Y, palmLen * 0.65);
+          const pole = target.clone().addScaledVector(fwdW, -0.50).addScaledVector(_Y, 0.42).addScaledVector(barAxis, sgn * 0.14);
+          aOut[Side] = { target, pole, forearmTwist: -1.30 };
+        }
+      } else if (handsMode === 'hip_bar') {
+        meta.benchZ = -0.52;
+        if (e.barbell) {
+          const hipsW = coach ? coach.worldPos('Hips') : wp(this.hips);
+          const barAxis = rightW.clone();
+          const barPos = hipsW.clone().addScaledVector(_Y, 0.08).addScaledVector(fwdW, 0.075);
+          meta.barPos = barPos.clone();
+          meta.barAxis = barAxis;
+          meta.barPad = true;
+          const gripHalf = shHalfW + 0.08;
+          for (const [Side, sgn] of [['Left', 1], ['Right', -1]]) {
+            const target = barPos.clone().addScaledVector(barAxis, sgn * gripHalf);
+            const pole = target.clone().addScaledVector(_Y, -0.22).addScaledVector(barAxis, sgn * 0.25);
+            aOut[Side] = { target, pole, forearmTwist: -1.20 };
+          }
+        }
+      } else if (handsMode === 'band_pull') {
+        // Οριζόντιο τόξο διάνοιξης λάστιχου στο ύψος των ώμων με ελαφρά λυγισμένους αγκώνες
+        const shMid = getShMid();
+        const open01 = clamp((cur.srz + 0.08) / 1.32, 0, 1);
+        const halfX = lerp(0.14, shHalfW + armReach * 0.80, open01);
+        const fwdD = lerp(armReach * 0.88, 0.16, open01);
+        for (const [Side, sgn] of [['Left', 1], ['Right', -1]]) {
+          const target = shMid.clone().addScaledVector(rightW, sgn * halfX).addScaledVector(fwdW, fwdD);
+          const pole = target.clone().addScaledVector(fwdW, -0.45).addScaledVector(_Y, -0.22).addScaledVector(rightW, sgn * 0.15);
+          aOut[Side] = { target, pole, forearmTwist: -1.25 };
+        }
+      } else if (handsMode === 'trx_pull' || handsMode === 'trx_push') {
+        const isPush = handsMode === 'trx_push';
+        meta.trxAnchor = new THREE.Vector3(0, 2.42, isPush ? -1.25 : 1.25);
+        const shMid = getShMid();
+        const bend01 = clamp((-cur.elL - 0.12) / 1.65, 0, 1);
+        const hHalf = isPush ? (shHalfW + 0.12) : Math.max(0.16, shHalfW + 0.03);
+        const fwdD = isPush
+          ? lerp(armReach * 0.90, 0.18, bend01)
+          : lerp(armReach * 0.92, 0.22, bend01);
+        const yOff = isPush ? lerp(-0.06, -0.02, bend01) : lerp(0.10, -0.04, bend01);
+        for (const [Side, sgn] of [['Left', 1], ['Right', -1]]) {
+          const target = shMid.clone()
+            .addScaledVector(rightW, sgn * hHalf)
+            .addScaledVector(fwdW, fwdD)
+            .addScaledVector(_Y, yOff);
+          const pole = target.clone()
+            .addScaledVector(fwdW, -0.45)
+            .addScaledVector(_Y, -0.25)
+            .addScaledVector(rightW, sgn * 0.42 * flare);
+          aOut[Side] = { target, pole, forearmTwist: fTwist };
+        }
+      } else if (handsMode === 'curl') {
+        // Αγκώνες σταθερά κοντά στα πλευρά, καθαρός υπτιασμός αντιβραχίου (παλάμες ΠΑΝΩ!)
+        const curl01 = clamp((-cur.elL - 0.10) / 2.28, 0, 1);
+        const ang = lerp(0.12, 2.38, curl01);
+        for (const [Side, sgn] of [['Left', 1], ['Right', -1]]) {
+          const sh = Side === 'Left' ? getShL() : getShR();
+          const elbowIdeal = sh.clone().addScaledVector(_Y, -dims.lenArmL * 0.96).addScaledVector(fwdW, 0.03 * curl01).addScaledVector(rightW, sgn * 0.02);
+          const target = elbowIdeal.clone()
+            .addScaledVector(_Y, -dims.lenForeL * Math.cos(ang))
+            .addScaledVector(fwdW, dims.lenForeL * Math.sin(ang));
+          const pole = elbowIdeal.clone().addScaledVector(fwdW, -0.45).addScaledVector(_Y, -0.15);
+          aOut[Side] = { target, pole, forearmTwist: 1.45 };
+        }
+      } else if (handsMode === 'ohp') {
+        // Κατακόρυφη πίεση ώμων στο επίπεδο ωμοπλάτης (~30° μπροστά)
+        const press01 = clamp((-cur.slx - 0.55) / 2.40, 0, 1);
+        const hHalf = e.barbell ? (shHalfW + 0.13) : (shHalfW + 0.09);
+        const shMid = getShMid();
+        const yOff = lerp(0.06, armReach * 0.93, press01);
+        const zOff = lerp(0.10, 0.03, press01);
+        if (e.barbell) {
+          meta.barPos = shMid.clone().addScaledVector(_Y, yOff + palmLen * 0.5).addScaledVector(fwdW, zOff);
+          meta.barAxis = rightW.clone();
+        }
+        for (const [Side, sgn] of [['Left', 1], ['Right', -1]]) {
+          const target = shMid.clone()
+            .addScaledVector(rightW, sgn * hHalf)
+            .addScaledVector(_Y, yOff)
+            .addScaledVector(fwdW, zOff);
+          const pole = target.clone().addScaledVector(_Y, -0.45).addScaledVector(fwdW, 0.25).addScaledVector(rightW, sgn * 0.22);
+          aOut[Side] = { target, pole, forearmTwist: -1.25 };
+        }
+      } else if (handsMode === 'russian_twist') {
+        // Δύο χέρια μαζί μπροστά στον στρεφόμενο θώρακα (κρατώντας αλτήρα/kettlebell ή ενωμένες παλάμες)
+        const shMid = getShMid();
+        const anchor = shMid.clone().addScaledVector(chestFwd, 0.34).addScaledVector(chestUp, -0.14);
+        const handSep = (e.dumbbells || e.kettlebell) ? 0.065 : 0.04;
+        for (const [Side, sgn] of [['Left', 1], ['Right', -1]]) {
+          const target = anchor.clone().addScaledVector(rightW, sgn * handSep);
+          const pole = target.clone().addScaledVector(_Y, -0.30).addScaledVector(chestFwd, -0.25).addScaledVector(rightW, sgn * 0.28);
+          aOut[Side] = { target, pole, forearmTwist: 0 };
+        }
+      } else if (handsMode === 'hinge_hold' && (e.barbell || e.kettlebell)) {
+        const shMid = getShMid();
+        const gripHalf = e.barbell ? (shHalfW + 0.09) : 0.055;
+        const barY = Math.max(BARBELL_PLATE_R, shMid.y - armReach * 0.94);
+        const barPos = rotY(0, barY, 0.14);
+        if (e.barbell) { meta.barPos = barPos.clone(); meta.barAxis = rightW.clone(); }
+        for (const [Side, sgn] of [['Left', 1], ['Right', -1]]) {
+          const target = barPos.clone().addScaledVector(rightW, sgn * gripHalf).addScaledVector(_Y, palmLen * 0.7);
+          const pole = target.clone().addScaledVector(fwdW, -0.42).addScaledVector(_Y, 0.30);
+          aOut[Side] = { target, pole, forearmTwist: -1.25 };
+        }
+      } else if ((e.kettlebell || e.goblet) && (m === MOTIONS.squat || m === MOTIONS.lunge || m === MOTIONS.reverse_lunge || m === MOTIONS.step_up)) {
+        // Goblet hold: και οι δύο παλάμες αγκαλιάζουν το βάρος μπροστά στο στέρνο (zero-lag από Spine2!)
+        const sternum = coach
+          ? coach.worldPos('Spine2').addScaledVector(chestFwd, 0.22).addScaledVector(chestUp, 0.04)
+          : wp(this.chest, 0, 0.16, 0.23);
+        for (const [Side, sgn] of [['Left', 1], ['Right', -1]]) {
+          const target = sternum.clone().addScaledVector(rightW, sgn * 0.065);
+          const pole = target.clone().addScaledVector(_Y, -0.40).addScaledVector(rightW, sgn * 0.18).addScaledVector(chestFwd, -0.16);
+          aOut[Side] = { target, pole, forearmTwist: 0.15 };
         }
       }
-    } else if (handsMode === 'trx_pull' || handsMode === 'trx_push') {
-      const isPush = handsMode === 'trx_push';
-      meta.trxAnchor = new THREE.Vector3(0, 2.45, isPush ? -1.25 : 1.25);
-      // Κρατάμε συμμετρικές λαβές TRX με καθαρή κατεύθυνση αγκώνων
-      const aLHand = wp(this.aL.el, 0, -L.fore, 0).multiplyScalar(kScale);
-      const aRHand = wp(this.aR.el, 0, -L.fore, 0).multiplyScalar(kScale);
-      const midH = aLHand.add(aRHand).multiplyScalar(0.5);
-      const hHalf = (ikSpec.handW || 0.40) * 0.5;
-      for (const [S, sgn] of [['Left', 1], ['Right', -1]]) {
-        const target = midH.clone().addScaledVector(rightW, sgn * hHalf);
-        const pole = target.clone()
-          .addScaledVector(fwdW, isPush ? -0.45 : -0.42)
-          .addScaledVector(_Y, -0.25)
-          .addScaledVector(rightW, sgn * 0.40 * flare);
-        arms[S] = { target, pole, forearmTwist: fTwist };
-      }
-    } else if ((e.kettlebell || e.goblet) && (m === MOTIONS.squat || m === MOTIONS.lunge || m === MOTIONS.reverse_lunge || m === MOTIONS.step_up)) {
-      // Goblet hold: και οι δύο παλάμες αγκαλιάζουν το βάρος μπροστά στο στέρνο
-      const sternum = wp(this.chest, 0, 0.16, 0.23).multiplyScalar(kScale);
-      for (const [S, sgn] of [['Left', 1], ['Right', -1]]) {
-        const target = sternum.clone().addScaledVector(rightW, sgn * 0.065);
-        const pole = target.clone().addScaledVector(_Y, -0.42).addScaledVector(rightW, sgn * 0.16).addScaledVector(fwdW, -0.15);
-        arms[S] = { target, pole, forearmTwist: 0.15 };
-      }
-    }
+    };
 
-    return { legs, arms, meta };
+    computeArms(sk, null);
+    meta._refreshArms = computeArms;
+    return { legs, arms, hipsPos, groundLock, meta, refreshArms: computeArms };
   }
 
-  /** Μεταφορά στο ρεαλιστικό μοντέλο (FK + 2-Bone IK) + ενημέρωση εξοπλισμού & contact shadows */
+  /** Εφαρμογή 2-Bone IK και στον procedural proxy σκελετό (looks 'male'/'female') */
+  _applyProxyIK(res) {
+    if (!res) return;
+    const S = this.look.scale;
+    if (res.hipsPos) {
+      const lp = res.hipsPos.clone();
+      this.hips.parent.worldToLocal(lp);
+      this.hips.position.copy(lp);
+      this.figure.updateMatrixWorld(true);
+    }
+    const setGroupWorld = (grp, dir, sec) => {
+      const wq = basisFromDirSec(dir, sec, this._qTmp).multiply(PROXY_REST_INV);
+      grp.parent.getWorldQuaternion(this._qTmp2);
+      grp.quaternion.copy(this._qTmp2.invert().multiply(wq));
+      grp.updateMatrixWorld(true);
+    };
+    const sides = [['Left', this.aR, this.lR], ['Right', this.aL, this.lL]];
+    for (const [Side, a, l] of sides) {
+      const legIK = res.legs?.[Side];
+      if (legIK && legIK.target) {
+        const hpW = l.hp.getWorldPosition(this._v1);
+        const sol = solveTwoBoneIK(hpW, legIK.target, legIK.pole, L.thigh * S, L.shin * S, { softness: 0.015 });
+        setGroupWorld(l.hp, sol.dir1, sol.p1);
+        setGroupWorld(l.kn, sol.dir2, sol.p2);
+      }
+      const armIK = res.arms?.[Side];
+      if (armIK && armIK.target) {
+        const shW = a.sh.getWorldPosition(this._v1);
+        const sol = solveTwoBoneIK(shW, armIK.target, armIK.pole, L.upper * S, L.fore * S, { softness: 0.012 });
+        setGroupWorld(a.sh, sol.dir1, sol.p1.clone().negate());
+        setGroupWorld(a.el, sol.dir2, sol.p2.clone().negate());
+      }
+    }
+  }
+
+  /** Μεταφορά στο ρεαλιστικό μοντέλο (FK + Zero-Lag 2-Bone IK) + εξοπλισμός & contact shadows */
   post(dt) {
     this.figure.updateMatrixWorld(true);
     this.palmW = (this.palmW ?? 0) + ((this.mode === 'idle' ? 0 : 1) - (this.palmW ?? 0)) * Math.min(1, dt * 6);
@@ -939,18 +1171,18 @@ export class Avatar {
     const sides = [['Left', this.aR, this.lR], ['Right', this.aL, this.lL]]; // Left του μοντέλου = +x
 
     const ikSpec = this.motion.ik || {};
-    const { legs, arms, meta } = this._buildIK(this.motion, this.cur, sides, wp, ax);
+    const cy = ax(this.chest, _Y), cz = ax(this.chest, _Z);
 
-    // Επιλογή στυλ δαχτύλων: προτεραιότητα στον εξοπλισμό, αλλιώς από την άσκηση
     const eqGripStyle = this.equip.gripStyle();
     const gripStyle = this.mode === 'idle' ? 'relaxed' : (eqGripStyle || ikSpec.grip || 'relaxed');
     const gripAmt = this.mode === 'idle' ? 0.25 : (gripStyle === 'floor' ? 0.05 : this.equip.grip());
+
+    let meta = { barPos: null, barAxis: null, barPad: false, bandMode: 'loop', trxAnchor: null, benchZ: -0.40, stepZ: 0.42, wallZ: -0.22 };
 
     if (this.skinned) {
       const T = {};
       const hy = ax(this.hips, _Y), hz = ax(this.hips, _Z);
       const ay = ax(this.abdomen, _Y), az = ax(this.abdomen, _Z);
-      const cy = ax(this.chest, _Y), cz = ax(this.chest, _Z);
       const ey = ax(this.headG, _Y), ez = ax(this.headG, _Z);
 
       T.Hips = { dir: hy, sec: hz };
@@ -962,36 +1194,39 @@ export class Avatar {
 
       // Scapulohumeral rhythm για κλείδες (LeftShoulder / RightShoulder)
       const cx = ax(this.chest, _X);
-      for (const [S, a, l] of sides) {
-        const sgn = S === 'Left' ? 1 : -1;
+      for (const [Side, a, l] of sides) {
+        const sgn = Side === 'Left' ? 1 : -1;
         const sh = wp(a.sh), el = wp(a.el), hand = wp(a.el, 0, -L.fore, 0);
         const armDir = el.clone().sub(sh);
-        // Όταν ο βραχίονας ανυψώνεται πάνω από τις 60°, η κλείδα ανυψώνεται απαλά (~12°-18°)
         const upDot = clamp(armDir.clone().normalize().dot(cy), 0, 1);
-        const clavLift = clamp(upDot * 0.28 + (S === 'Left' ? (this.cur.shR || 0) : (this.cur.shL || 0)) * 3.0, -0.08, 0.30);
+        const clavLift = clamp(upDot * 0.28 + (Side === 'Left' ? (this.cur.shR || 0) : (this.cur.shL || 0)) * 3.0, -0.08, 0.30);
         const clavDir = cx.clone().multiplyScalar(sgn).addScaledVector(cy, clavLift).normalize();
-        T[S + 'Shoulder'] = { dir: clavDir, sec: cz };
+        T[Side + 'Shoulder'] = { dir: clavDir, sec: cz };
 
-        T[S + 'Arm'] = { dir: armDir, sec: ax(a.sh, _Z) };
+        T[Side + 'Arm'] = { dir: armDir, sec: ax(a.sh, _Z) };
         const fdir = hand.sub(el), fsec = ax(a.el, _Z);
         const fTw = (ikSpec.forearmTwist ?? PALM_TO_TWIST[this.motion.palm] ?? 0) * this.palmW;
-        if (fTw) applyAxialTwist(fsec, fdir, S === 'Left' ? -fTw : fTw);
-        T[S + 'ForeArm'] = { dir: fdir, sec: fsec };
+        if (fTw) applyAxialTwist(fsec, fdir, Side === 'Left' ? -fTw : fTw);
+        T[Side + 'ForeArm'] = { dir: fdir, sec: fsec };
 
         const hp = wp(l.hp), kn = wp(l.kn), an = wp(l.an), toe = wp(l.an, 0, -0.05, 0.14);
-        T[S + 'UpLeg'] = { dir: kn.clone().sub(hp), sec: ax(l.hp, _Z) };
-        T[S + 'Leg'] = { dir: an.clone().sub(kn), sec: ax(l.kn, _Z) };
-        T[S + 'Foot'] = { dir: toe.sub(an), sec: ax(l.an, _Y) };
+        T[Side + 'UpLeg'] = { dir: kn.clone().sub(hp), sec: ax(l.hp, _Z) };
+        T[Side + 'Leg'] = { dir: an.clone().sub(kn), sec: ax(l.kn, _Z) };
+        T[Side + 'Foot'] = { dir: toe.sub(an), sec: ax(l.an, _Y) };
       }
 
       const hips = wp(this.hips).multiplyScalar(this.k);
       this.skinned.setGrip(gripAmt, gripAmt, gripStyle, gripStyle);
       const isJump = this.motion === MOTIONS.jumping_jack || this.motion === MOTIONS.burpee || this.motion === MOTIONS.high_knees;
-      this.skinned.drive(T, hips, dt, {
+      const resolvedMeta = this.skinned.drive(T, hips, dt, {
         air: isJump ? Math.max(0, this.cur.lift * this.k) : 0,
-        ik: { legs, arms },
-        groundLock: meta.groundLock,
+        resolveIK: sk => this._resolveIK(sk, this.motion, this.cur, wp, ax, cy, cz),
       });
+      if (resolvedMeta) meta = resolvedMeta;
+    } else {
+      const res = this._resolveIK(null, this.motion, this.cur, wp, ax, cy, cz);
+      meta = res.meta;
+      this._applyProxyIK(res);
     }
 
     // Εξαγωγή θέσεων χεριών/ποδιών για εξοπλισμό & contact shadows
@@ -999,7 +1234,7 @@ export class Avatar {
       figure: this.figure,
       yaw: this.yaw,
       feet: {},
-      matZ: (this.cur.rZ || 0) * (this.k || 1) + (this.cur.rrx > 0.3 ? -0.25 : 0.10),
+      matZ: (this.cur.rZ || 0) * (this.k || 1) + (this.cur.rrx > 0.3 ? -0.22 : 0.10),
       barPos: meta.barPos,
       barAxis: meta.barAxis,
       barPad: meta.barPad,
@@ -1010,24 +1245,24 @@ export class Avatar {
       wallZ: meta.wallZ,
     };
 
-    for (const [S, a, l] of sides) {
-      const key = S[0];
+    for (const [Side, a, l] of sides) {
+      const key = Side[0];
       if (this.skinned) {
         const sk = this.skinned;
-        const b = n => sk.worldPos(S + n);
+        const b = n => sk.worldPos(Side + n);
         const hand = b('Hand');
-        const mid = sk.b[S + 'HandMiddle1'] ? b('HandMiddle1') : hand.clone();
-        const i1 = sk.b[S + 'HandIndex1'] ? b('HandIndex1') : null;
-        const p1 = sk.b[S + 'HandPinky1'] ? b('HandPinky1') : null;
+        const mid = sk.b[Side + 'HandMiddle1'] ? b('HandMiddle1') : hand.clone();
+        const i1 = sk.b[Side + 'HandIndex1'] ? b('HandIndex1') : null;
+        const p1 = sk.b[Side + 'HandPinky1'] ? b('HandPinky1') : null;
         const fingers = mid.clone().sub(hand);
         const across = i1 && p1 ? p1.sub(i1) : ax(a.el, _X);
-        const palm = new THREE.Vector3().crossVectors(fingers, across).normalize().multiplyScalar(S === 'Left' ? -0.022 : 0.022);
+        const palm = new THREE.Vector3().crossVectors(fingers, across).normalize().multiplyScalar(Side === 'Left' ? -0.022 : 0.022);
         H[key] = { pos: hand.clone().addScaledVector(fingers, 1.22).add(palm), across };
-        const footW = sk.b[S + 'ToeBase'] ? b('Foot').add(b('ToeBase')).multiplyScalar(0.5) : b('Foot');
+        const footW = sk.b[Side + 'ToeBase'] ? b('Foot').add(b('ToeBase')).multiplyScalar(0.5) : b('Foot');
         H.feet[key] = footW.clone().setY(0.015);
-        // Contact shadow κάτω από κάθε πέλμα
-        const shMesh = this.cShadows[S === 'Left' ? 'footL' : 'footR'];
-        const fh = Math.max(0, footW.y - sk.dims.footHeight * 0.6);
+
+        const shMesh = this.cShadows[Side === 'Left' ? 'footL' : 'footR'];
+        const fh = Math.max(0, footW.y - sk.dims.footHeight * 0.65);
         shMesh.position.set(footW.x, 0.0025, footW.z);
         shMesh.rotation.z = -this.yaw;
         shMesh.material.opacity = 0.36 * clamp(1 - fh / 0.28, 0, 1);
@@ -1036,7 +1271,7 @@ export class Avatar {
         H[key] = { pos: wp(a.el, 0, -L.fore - 0.045, 0), across: ax(a.el, _X) };
         const footW = wp(l.an, 0, -0.06, 0.06);
         H.feet[key] = footW.clone().setY(0.015);
-        const shMesh = this.cShadows[S === 'Left' ? 'footL' : 'footR'];
+        const shMesh = this.cShadows[Side === 'Left' ? 'footL' : 'footR'];
         const fh = Math.max(0, footW.y);
         shMesh.position.set(footW.x, 0.0025, footW.z);
         shMesh.rotation.z = -this.yaw;
@@ -1045,9 +1280,9 @@ export class Avatar {
     }
 
     // Ακριβής ευθυγράμμιση μπάρας με τα λυμένα κέντρα παλαμών (μηδενικό κενό λαβής)
-    if (this.equip.e.barbell && H.L && H.R && meta.barPos) {
+    if (this.equip.e.barbell && H.L && H.R && meta.barPos && this.motionKey !== 'back_squat') {
       H.barPos = H.L.pos.clone().add(H.R.pos).multiplyScalar(0.5);
-      if (this.motionKey === 'deadlift' && H.barPos.y < 0.195) H.barPos.y = 0.195;
+      if (H.barPos.y < BARBELL_PLATE_R) H.barPos.y = BARBELL_PLATE_R;
       const span = H.R.pos.clone().sub(H.L.pos);
       if (span.lengthSq() > 1e-4) H.barAxis = span.normalize();
     }
@@ -1065,31 +1300,26 @@ export class Avatar {
   /** Μικρο-κινήσεις ζωής: φυσικό βλέμμα (με προστασία αυχένα), βλεφαρίδα, ομιλία, ουρά */
   living(dt) {
     const now = performance.now(), m = this.motion;
-    // Ουδέτερος αυχένας σε κινήσεις εδάφους/μεγάλης κλίσης — δεν στρίβει αφύσικα το κεφάλι
     const neutralNeck = m.floor || Math.abs(this.cur.tx) > 0.75;
     const gazeGain = neutralNeck ? 0.22 : 0.68;
     const targetYaw = clamp(-this.yaw * gazeGain + (this.cur.hdY || 0), -0.68, 0.68);
     this.headG.rotation.y += (targetYaw + Math.sin(this.time * 0.48) * 0.04 - this.headG.rotation.y) * (1 - Math.exp(-dt * 5));
     this.headG.rotation.z += ((this.cur.hdZ || 0) - this.headG.rotation.z) * (1 - Math.exp(-dt * 6));
 
-    // Βλεφαρίδα
     this.nextBlink -= dt;
     if (this.nextBlink < 0) { this.blink = 0.13; this.nextBlink = 2.2 + Math.random() * 3.4; }
     if (this.blink > 0) this.blink -= dt;
     const eyeY = this.blink > 0 ? 0.12 : 1;
     this.headG.children.forEach(c => { if (c.name === 'eye') c.scale.y = 0.75 * eyeY; });
 
-    // Στόμα & μικρο-νεύματα όταν μιλάει ο voice coach
     const talking = now < this.talkUntil && !this.paused;
     const open = talking ? 0.35 + 0.65 * Math.abs(Math.sin(this.time * 14)) : 0;
     if (talking) this.headG.rotation.x += Math.sin(this.time * 6.5) * 0.030;
     this.mouth.scale.y = 1 + open * 2.6;
     this.mouth.children[1].scale.y = 0.3 + open * 1.6;
 
-    // Απαλή μετατόπιση ισορροπίας σε idle/ready
     this.sway.rotation.z = (this.mode === 'idle' || this.mode === 'ready') ? Math.sin(this.time * 0.55) * 0.010 : 0;
 
-    // Δυναμική αλογοουρά (ελατήριο-αποσβεστήρας)
     if (this.tail) {
       this.headG.getWorldPosition(this.tmpV);
       const s = this.pt;
@@ -1111,6 +1341,7 @@ export class Avatar {
     this.mode = u === 0 ? 'ready' : 'hold';
     this.cur = this.pose(u, alt);
     this.equipPose(this.cur);
+    if (this.skinned) this.skinned.offY = 0;
     for (let i = 0; i < 40; i++) {
       this.apply(this.cur, this.motion);
       this.living(0.1);
@@ -1126,30 +1357,26 @@ export class Avatar {
   apply(p, m) {
     this.figure.rotation.y = this.yaw;
 
-    // Τμηματική κατανομή σπονδυλικής στήλης (οσφυϊκή + θωρακική) βάσει βιομηχανικού προφίλ
     const sp = spineDistribution(p.tx || 0, p.ty || 0, p.tz || 0, m.ik?.spine || 'neutral');
     this.abdomen.rotation.set(sp.lumbarX, sp.lumbarY, sp.lumbarZ);
     this.chest.rotation.set(sp.thoracicX, sp.thoracicY, sp.thoracicZ);
 
-    // Αντιστάθμιση κεφαλής (μειωμένη σε μεγάλες κλίσεις ώστε ο αυχένας να μένει ουδέτερος)
     const neckComp = Math.abs(p.tx || 0) > 0.75 ? 0.25 : 0.42;
     this.headG.rotation.x = (p.hd || 0) - (p.tx || 0) * neckComp;
 
-    // Ωμοπλάτες: ανασηκώνονται φυσικά με την ανύψωση των χεριών
     const up = (k, sk) => clamp((Math.abs(p[k + 'z']) - 1.1) * 0.035 + (-p[k + 'x'] > 1.9 ? 0.025 : 0) + (p[sk] || 0), -0.03, 0.055);
     this.aL.sh.position.y = 0.25 + up('sl', 'shL');
     this.aR.sh.position.y = 0.25 + up('sr', 'shR');
     this.aL.sh.rotation.set(p.slx, p.slY || 0, p.slz);
     this.aR.sh.rotation.set(p.srx, p.srY || 0, p.srz);
-    this.aL.el.rotation.x = Math.min(-0.02, p.elL); // ποτέ υπερέκταση αγκώνα
+    this.aL.el.rotation.x = Math.min(-0.02, p.elL);
     this.aR.el.rotation.x = Math.min(-0.02, p.elR);
 
     this.lL.hp.rotation.set(p.hlx, p.hlY || 0, p.hlz);
     this.lR.hp.rotation.set(p.hrx, p.hrY || 0, p.hrz);
-    this.lL.kn.rotation.x = Math.max(0, p.knL); // ποτέ υπερέκταση γονάτου
+    this.lL.kn.rotation.x = Math.max(0, p.knL);
     this.lR.kn.rotation.x = Math.max(0, p.knR);
 
-    // Πέλματα επίπεδα στο έδαφος (εκτός από κινήσεις στις μύτες)
     const flat = m.flatFeet !== false;
     this.lL.an.rotation.x = (flat ? -((p.rrx || 0) + p.hlx + p.knL) : 0) + (p.anL || 0);
     this.lR.an.rotation.x = (flat ? -((p.rrx || 0) + p.hrx + p.knR) : 0) + (p.anR || 0);
@@ -1161,7 +1388,7 @@ export class Avatar {
     }
 
     const leg = (hx, hz, kx) => {
-      const f1 = -hx, f2 = -hx - kx;
+      const f1 = -((p.rrx || 0) + hx), f2 = f1 - kx;
       return {
         v: (L.thigh * Math.cos(f1) + L.shin * Math.cos(f2)) * Math.cos(hz),
         f: L.thigh * Math.sin(f1) + L.shin * Math.sin(f2),

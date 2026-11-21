@@ -1,6 +1,6 @@
 // Ρεαλιστικός 3D coach: φόρτωση οποιουδήποτε Mixamo-rigged .glb,
-// αναλυτικό 2-bone IK απευθείας στις πραγματικές διαστάσεις του σκελετού,
-// retargeting με ορθοκανονική βάση, κράτημα δαχτύλων και PBR βελτίωση υλικών.
+// αναλυτικό 2-bone IK απευθείας στις πραγματικές διαστάσεις του σκελετού (zero-lag),
+// retargeting με ορθοκανονική βάση, κλίση πέλματος rest-pose, κράτημα δαχτύλων και PBR υλικά.
 import * as THREE from './vendor/three.module.min.js';
 import { GLTFLoader } from './vendor/jsm/loaders/GLTFLoader.js';
 import { basisFromDirSec, applyAxialTwist, solveTwoBoneIK, clamp } from './ik.js';
@@ -14,10 +14,10 @@ const FINGER_CASCADE = { Index: 0.90, Middle: 1.00, Ring: 1.08, Pinky: 1.16 };
 
 // Προφίλ κάμψης δαχτύλων [k1 (MCP), k2 (PIP), k3 (DIP), thumbCurl, thumbOppose]
 const GRIP_PROFILES = {
-  open:       [0.06, 0.08, 0.05, 0.05, 0.0],
-  floor:      [-0.08, 0.04, 0.04, 0.02, -0.15], // παλάμες ανοιχτές & επίπεδες στο έδαφος
+  open:       [0.06, 0.08, 0.05, 0.05, 0.00],
+  floor:      [-0.06, 0.03, 0.03, 0.02, -0.14], // παλάμες ανοιχτές & επίπεδες στο έδαφος
   relaxed:    [0.24, 0.34, 0.22, 0.16, 0.12],
-  chair:      [0.62, 0.78, 0.45, 0.20, 0.10],   // δάχτυλα αγκαλιάζουν την άκρη της καρέκλας
+  chair:      [0.64, 0.80, 0.48, 0.20, 0.10],   // δάχτυλα αγκαλιάζουν την άκρη της καρέκλας
   bar:        [1.18, 1.48, 1.02, 0.62, 0.58],   // σφιχτή λαβή μπάρας με αντίχειρα από πάνω
   dumbbell:   [1.15, 1.44, 0.98, 0.58, 0.52],
   kettlebell: [1.05, 1.32, 0.88, 0.48, 0.44],
@@ -26,15 +26,19 @@ const GRIP_PROFILES = {
 
 /**
  * Αναβάθμιση υλικών φορτωμένου GLB σε MeshPhysicalMaterial (μόνο σε quality='high')
- * για φυσική απόκριση δέρματος (απαλό sheen), υφασμάτων (microfiber sheen) και ματιών.
+ * με cache ώστε κοινόχρηστα υλικά να μην ανακατασκευάζονται ή διαγράφονται διπλά.
  */
 function upgradeMaterials(root, quality) {
+  const cache = new Map();
+  const toDispose = new Set();
+
   root.traverse(o => {
     if (!o.isMesh) return;
     o.castShadow = true;
     o.receiveShadow = true;
     o.frustumCulled = false;
     if (!o.material) return;
+
     const mats = Array.isArray(o.material) ? o.material : [o.material];
     const next = mats.map(m => {
       if (!m || !m.isMeshStandardMaterial) return m;
@@ -42,6 +46,8 @@ function upgradeMaterials(root, quality) {
         m.envMapIntensity = 0.82;
         return m;
       }
+      if (cache.has(m)) return cache.get(m);
+
       const tag = `${o.name || ''} ${m.name || ''}`.toLowerCase();
       const phys = new THREE.MeshPhysicalMaterial({
         color: m.color,
@@ -59,22 +65,28 @@ function upgradeMaterials(root, quality) {
         transparent: m.transparent,
         opacity: m.opacity,
         alphaTest: m.alphaTest,
+        depthWrite: m.depthWrite,
         side: m.side,
         roughness: m.roughness,
         metalness: m.metalness,
         vertexColors: m.vertexColors,
         envMapIntensity: 0.85,
       });
-      if (/eye|cornea|iris|lash/i.test(tag)) {
-        phys.roughness = 0.18;
-        phys.clearcoat = 0.72;
+
+      if (/eyelash|lash/i.test(tag)) {
+        // Βλεφαρίδες (alpha-card): ματ χωρίς clearcoat
+        phys.roughness = 0.78;
+        phys.metalness = 0.0;
+      } else if (/eye|cornea|iris/i.test(tag)) {
+        phys.roughness = 0.16;
+        phys.clearcoat = 0.75;
         phys.clearcoatRoughness = 0.10;
       } else if (/hair|brow|beard|ponytail/i.test(tag)) {
         phys.roughness = Math.max(m.roughness, 0.48);
-        phys.sheen = 0.30;
-        phys.sheenRoughness = 0.55;
-        phys.clearcoat = 0.16;
-        phys.clearcoatRoughness = 0.45;
+        phys.sheen = 0.28;
+        phys.sheenRoughness = 0.56;
+        phys.clearcoat = 0.14;
+        phys.clearcoatRoughness = 0.46;
       } else if (/skin|body|face|head|arm|leg|hand|neck/i.test(tag)) {
         phys.roughness = clamp(m.roughness, 0.46, 0.64);
         phys.metalness = 0.0;
@@ -89,7 +101,7 @@ function upgradeMaterials(root, quality) {
         phys.clearcoat = 0.14;
         phys.clearcoatRoughness = 0.42;
       } else {
-        // Αθλητικά ρούχα: ματ μικροΐνα με απαλό sheen
+        // Αθλητικά υφάσματα: ματ μικροΐνα με απαλό sheen
         phys.roughness = Math.max(m.roughness, 0.72);
         phys.metalness = Math.min(m.metalness, 0.08);
         phys.sheen = 0.42;
@@ -97,11 +109,15 @@ function upgradeMaterials(root, quality) {
         phys.sheenRoughness = 0.80;
         phys.envMapIntensity = 0.68;
       }
-      m.dispose();
+
+      cache.set(m, phys);
+      toDispose.add(m);
       return phys;
     });
     o.material = Array.isArray(o.material) ? next : next[0];
   });
+
+  toDispose.forEach(m => m.dispose());
 }
 
 export async function loadCoachModel(src, opts = {}) {
@@ -133,7 +149,7 @@ export class SkinnedCoach {
       throw new Error('Το μοντέλο δεν έχει σκελετό τύπου Mixamo (λείπουν: ' + miss.join(', ') + ')');
     }
 
-    // Κανονικοποίηση μεγέθους: ύψος ≈ 1.70m, πέλματα στο y = 0
+    // Κανονικοποίηση μεγέθους: ύψος ≈ 1.70m, πέλματα ακριβώς στο y = 0
     root.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(root);
     const s = 1.70 / Math.max(box.max.y - box.min.y, 0.01);
@@ -158,7 +174,24 @@ export class SkinnedCoach {
     const p = n => this.rest[n]?.pos;
     const ch = (a, b) => (p(b) ? p(b).clone().sub(p(a)) : null);
 
-    // Πραγματικές ανατομικές διαστάσεις του φορτωμένου μοντέλου (για ακριβές 2-bone IK)
+    // Κλίση πέλματος σε T-pose (Foot → ToeBase κατεβαίνει ~25°· τη διατηρούμε ώστε η σόλα να μένει απόλυτα επίπεδη!)
+    let footRestSlope = -0.45;
+    let toeRestSlope = 0;
+    if (p('LeftToeBase')) {
+      const f2t = p('LeftToeBase').clone().sub(p('LeftFoot'));
+      const h = Math.max(0.04, Math.hypot(f2t.x, f2t.z));
+      footRestSlope = f2t.y / h;
+      if (p('LeftToe_End')) {
+        const t2e = p('LeftToe_End').clone().sub(p('LeftToeBase'));
+        const ht = Math.max(0.02, Math.hypot(t2e.x, t2e.z));
+        toeRestSlope = t2e.y / ht;
+      }
+    }
+
+    const shMid = p('LeftArm').clone().add(p('RightArm')).multiplyScalar(0.5);
+    const palmLen = p('LeftHandMiddle1') ? p('LeftHand').distanceTo(p('LeftHandMiddle1')) : 0.075;
+
+    // Πραγματικές ανατομικές διαστάσεις του φορτωμένου μοντέλου (για ακριβές, αυτο-βαθμονομούμενο 2-bone IK)
     this.dims = {
       lenUpLegL: p('LeftUpLeg').distanceTo(p('LeftLeg')),
       lenLegL: p('LeftLeg').distanceTo(p('LeftFoot')),
@@ -168,9 +201,13 @@ export class SkinnedCoach {
       lenForeL: p('LeftForeArm').distanceTo(p('LeftHand')),
       lenArmR: p('RightArm').distanceTo(p('RightForeArm')),
       lenForeR: p('RightForeArm').distanceTo(p('RightHand')),
+      torsoLen: Math.max(0.32, shMid.distanceTo(p('Hips'))),
+      palmLen: clamp(palmLen, 0.05, 0.10),
       footHeight: Math.max(0.055, (p('LeftFoot').y + p('RightFoot').y) * 0.5),
       toeHeight: p('LeftToeBase') ? Math.max(0.018, (p('LeftToeBase').y + p('RightToeBase').y) * 0.5) : 0.024,
-      toeFwd: p('LeftToeBase') ? Math.max(0.09, p('LeftToeBase').z - p('LeftFoot').z) : 0.13,
+      toeFwd: p('LeftToeBase') ? Math.max(0.09, Math.abs(p('LeftToeBase').z - p('LeftFoot').z)) : 0.13,
+      footRestSlope,
+      toeRestSlope,
       hipHalfW: Math.abs(p('LeftUpLeg').x - p('RightUpLeg').x) * 0.5,
       shoulderHalfW: Math.abs(p('LeftArm').x - p('RightArm').x) * 0.5,
     };
@@ -184,7 +221,6 @@ export class SkinnedCoach {
      * Κατά την εκτέλεση, για κάθε στόχο { dir, sec } σε world space:
      *   Q_world,i = basis(dir, sec) * Q_offset,i
      *   Q_local,i = Q_world,parent^{-1} * Q_world,i
-     * Αυτό λειτουργεί ανεξάρτητα από τις τοπικές συμβάσεις αξόνων του .glb (Mixamo κ.ά.).
      */
     const mkEntry = (n, c, sec) => {
       const dir = c ? ch(n, c) : Y.clone();
@@ -192,7 +228,7 @@ export class SkinnedCoach {
       return { n, offset };
     };
 
-    // Αλυσίδα κορμού & κεφαλής (οδηγείται πάντα πρώτη ώστε να γνωρίζουμε ακριβείς θέσεις αρθρώσεων)
+    // Αλυσίδα κορμού, κεφαλής & κλειδών (οδηγείται πάντα 1η ώστε να είναι γνωστές οι ακριβείς αρθρώσεις στο τρέχον καρέ)
     this.torsoChain = [
       ['Hips', 'Spine', Z],
       ['Spine', this.b.Spine1 ? 'Spine1' : 'Spine2', Z],
@@ -257,11 +293,11 @@ export class SkinnedCoach {
     // Προ-δεσμευμένα scratch αντικείμενα (zero GC ανά καρέ)
     this._q1 = new THREE.Quaternion();
     this._q2 = new THREE.Quaternion();
-    this._q3 = new THREE.Quaternion();
     this._v1 = V();
     this._v2 = V();
     this._v3 = V();
     this._v4 = V();
+    this._v5 = V();
     this._ikRes = {
       midPos: V(), endPos: V(), dir1: V(), dir2: V(),
       p1: V(), p2: V(), poleNormal: V(), bendNormal: V(),
@@ -291,14 +327,17 @@ export class SkinnedCoach {
   }
 
   /**
-   * Οδηγεί τον Mixamo σκελετό με υβριδικό FK (κορμός/κεφάλι/κλείδες) + Αναλυτικό 2-Bone IK (πόδια & χέρια).
-   * @param {Object} targets  { BoneName: { dir, sec } } σε world space
-   * @param {THREE.Vector3} hipsPos  Παγκόσμια θέση πυέλου
-   * @param {number} dt  Χρονικό βήμα (s)
-   * @param {Object} opts  { air, ik: { legs, arms }, groundLock }
+   * Οδηγεί τον Mixamo σκελετό με 2-σταδίων υβριδικό FK + Αναλυτικό 2-Bone IK (zero frame lag):
+   *  1. Κορμός, κεφάλι, κλείδες (FK).
+   *  2. Προαιρετική επίλυση στόχων IK (`opts.resolveIK(this)`) πάνω στις ΤΡΕΧΟΥΣΕΣ πραγματικές
+   *     θέσεις ώμων/αυχένα/ισχίων του μοντέλου (μηδέν καθυστέρηση καρέ & πλήρης αυτο-βαθμονόμηση).
+   *  3. Περιορισμός ύψους πυέλου για καρφωμένα πέλματα.
+   *  4. 2-Bone IK ποδιών + ακριβής κλίση σόλας (`footRestSlope`).
+   *  5. 2-Bone IK χεριών + στροφή βραχιονίου/αντιβραχίου + επαφή παλάμης.
+   *  6. Δάχτυλα & ασφαλής εδαφική επαφή χωρίς ταλαντώσεις.
    */
   drive(targets, hipsPos, dt, opts = {}) {
-    const { air = 0, ik = null, groundLock = 'auto' } = opts;
+    let { air = 0, ik = null, groundLock = 'auto', resolveIK = null } = opts;
 
     // 1. Κορμός, κεφάλι και κλείδες (FK retargeting)
     for (let i = 0; i < this.torsoChain.length; i++) {
@@ -318,9 +357,28 @@ export class SkinnedCoach {
       bone.updateMatrixWorld(true);
     }
 
-    // 2. Περιορισμός έκτασης πυέλου για καρφωμένα πέλματα:
-    // Αν κάποιο καρφωμένο πόδι απέχει > 99% του (L1 + L2) από το ισχίο, κατεβάζουμε
-    // ομαλά την πύελο ώστε το πέλμα να ΜΗΝ ξεκολλήσει ποτέ από το έδαφος.
+    // 2. Zero-lag επίλυση IK στόχων πάνω στον τρέχοντα προσανατολισμό κορμού του Mixamo μοντέλου
+    let resolvedMeta = null;
+    if (resolveIK) {
+      const res = resolveIK(this);
+      if (res) {
+        ik = { legs: res.legs, arms: res.arms };
+        if (res.groundLock) groundLock = res.groundLock;
+        resolvedMeta = res.meta || null;
+        if (res.hipsPos) {
+          const hipsBone = this.b.Hips;
+          const lp = this._v1.copy(res.hipsPos);
+          lp.y += this.offY;
+          hipsBone.parent.worldToLocal(lp);
+          hipsBone.position.copy(lp);
+          hipsBone.updateMatrixWorld(true);
+          // Επανυπολογισμός εξαρτώμενων στόχων χεριών (π.χ. back_bar / floor) μετά τη ρύθμιση πυέλου
+          if (res.refreshArms) res.refreshArms(this, ik);
+        }
+      }
+    }
+
+    // 3. Περιορισμός έκτασης πυέλου για καρφωμένα πέλματα (ποτέ αποκόλληση από το έδαφος)
     if (ik && ik.legs) {
       let maxDrop = 0;
       for (const side of ['Left', 'Right']) {
@@ -334,9 +392,11 @@ export class SkinnedCoach {
         const dz = hipPos.z - legIK.target.z;
         const dy = hipPos.y - legIK.target.y;
         const distSq = dx * dx + dy * dy + dz * dz;
-        if (distSq > maxR * maxR && dy > 0.05) {
-          const horizSq = dx * dx + dz * dz;
-          const allowDy = horizSq < maxR * maxR ? Math.sqrt(maxR * maxR - horizSq) : 0.05;
+        const horizSq = dx * dx + dz * dz;
+        // Μόνο για κυρίως κατακόρυφο πόδι (όρθιες ασκήσεις). Σε σανίδα/κάμψεις το πόδι είναι σχεδόν οριζόντιο:
+        // εκεί το allowDy → 0 και η πύελος «έπεφτε» στο πάτωμα (γονατιστή θέση).
+        if (distSq > maxR * maxR && dy > 0.04 && horizSq < (0.6 * maxR) ** 2) {
+          const allowDy = horizSq < maxR * maxR ? Math.sqrt(maxR * maxR - horizSq) : 0.04;
           const drop = dy - allowDy;
           if (drop > maxDrop) maxDrop = drop;
         }
@@ -348,13 +408,19 @@ export class SkinnedCoach {
         hipsBone.parent.worldToLocal(wp);
         hipsBone.position.copy(wp);
         hipsBone.updateMatrixWorld(true);
+        if (resolvedMeta?._refreshArms) resolvedMeta._refreshArms(this, ik);
       }
     }
 
-    // 3. Πόδια: Αναλυτικό 2-Bone IK (ή FK fallback αν το πόδι είναι ελεύθερο)
+    // 4. Πόδια: Αναλυτικό 2-Bone IK (με footRestSlope ώστε οι σόλες να ακουμπούν 100% επίπεδα!)
+    const pinnedBones = new Set();
     for (const side of ['Left', 'Right']) {
       const legIK = ik?.legs?.[side];
       if (legIK && legIK.target) {
+        if (legIK.pin) {
+          pinnedBones.add(side + 'Foot');
+          pinnedBones.add(side + 'ToeBase');
+        }
         const hipPos = this.worldPos(side + 'UpLeg', this._v1);
         const L1 = side === 'Left' ? this.dims.lenUpLegL : this.dims.lenUpLegR;
         const L2 = side === 'Left' ? this.dims.lenLegL : this.dims.lenLegR;
@@ -367,12 +433,16 @@ export class SkinnedCoach {
         this._setBoneWorld(side + 'UpLeg', sol.dir1, sol.p1);
         this._setBoneWorld(side + 'Leg', sol.dir2, sol.p2);
 
-        // Προσανατολισμός πέλματος
+        // Προσανατολισμός πέλματος με διόρθωση rest-pose κλίσης σόλας
         if (this.limbMap[side + 'Foot']) {
           if (legIK.mode === 'flat' && legIK.footDir) {
-            this._setBoneWorld(side + 'Foot', legIK.footDir, Y);
+            const flatDir = this._v4.copy(legIK.footDir).setY(0).normalize();
+            flatDir.y = this.dims.footRestSlope;
+            this._setBoneWorld(side + 'Foot', flatDir, Y);
             if (this.limbMap[side + 'ToeBase']) {
-              this._setBoneWorld(side + 'ToeBase', legIK.footDir, Y);
+              const toeDir = this._v5.copy(legIK.footDir).setY(0).normalize();
+              toeDir.y = this.dims.toeRestSlope;
+              this._setBoneWorld(side + 'ToeBase', toeDir, Y);
             }
           } else if (legIK.mode === 'toe' && legIK.toePos) {
             const anklePos = this.worldPos(side + 'Foot', this._v2);
@@ -381,7 +451,9 @@ export class SkinnedCoach {
               this._setBoneWorld(side + 'Foot', fDir, legIK.footUp || Y);
             }
             if (this.limbMap[side + 'ToeBase'] && legIK.footDir) {
-              this._setBoneWorld(side + 'ToeBase', legIK.footDir, Y);
+              const toeDir = this._v5.copy(legIK.footDir).setY(0).normalize();
+              toeDir.y = this.dims.toeRestSlope;
+              this._setBoneWorld(side + 'ToeBase', toeDir, Y);
             }
           } else if (targets[side + 'Foot']) {
             const tf = targets[side + 'Foot'];
@@ -396,10 +468,14 @@ export class SkinnedCoach {
       }
     }
 
-    // 4. Χέρια: Αναλυτικό 2-Bone IK (ή FK fallback) + στροφή βραχιονίου & πρηνισμός/υπτιασμός αντιβραχίου
+    // 5. Χέρια: Αναλυτικό 2-Bone IK + βραχιόνια/αντιβραχιόνια στροφή + επαφή παλάμης
     for (const side of ['Left', 'Right']) {
       const armIK = ik?.arms?.[side];
       if (armIK && armIK.target) {
+        if (armIK.pinFloor) {
+          pinnedBones.add(side + 'Hand');
+          pinnedBones.add(side + 'ForeArm');
+        }
         const shPos = this.worldPos(side + 'Arm', this._v1);
         const L1 = side === 'Left' ? this.dims.lenArmL : this.dims.lenArmR;
         const L2 = side === 'Left' ? this.dims.lenForeL : this.dims.lenForeR;
@@ -412,7 +488,7 @@ export class SkinnedCoach {
         const sec1 = this._v2.copy(sol.p1).negate();
         const sec2 = this._v3.copy(sol.p2).negate();
 
-        // Κατανομή αξονικής στροφής: ελαφριά βραχιόνια συμμετοχή + κύριος πρηνισμός/υπτιασμός στο αντιβράχιο
+        // Κατανομή αξονικής στροφής: βραχιόνια συμμετοχή + πρηνισμός/υπτιασμός αντιβραχίου
         const hTw = clamp(armIK.humeralTwist || 0, -1.3, 1.3);
         const fTw = clamp(armIK.forearmTwist || 0, -1.52, 1.52);
         const sgn = side === 'Left' ? -1 : 1;
@@ -426,7 +502,6 @@ export class SkinnedCoach {
           if (armIK.handDir && armIK.handPalm) {
             this._setBoneWorld(side + 'Hand', armIK.handDir, armIK.handPalm);
           } else {
-            // Ουδέτερη ευθυγράμμιση καρπού με το αντιβράχιο (παλάμη = ±(dir2 × sec2))
             const palm = this._v4.crossVectors(sol.dir2, sec2).multiplyScalar(side === 'Left' ? 1 : -1);
             this._setBoneWorld(side + 'Hand', sol.dir2, palm);
           }
@@ -439,7 +514,7 @@ export class SkinnedCoach {
       }
     }
 
-    // 5. Ρεαλιστική άρθρωση δαχτύλων (διαφορετικό προφίλ ανά εξοπλισμό / έδαφος)
+    // 6. Ρεαλιστική άρθρωση δαχτύλων (8 προφίλ ανά εξοπλισμό / έδαφος)
     const kf = 1 - Math.exp(-dt * 11);
     for (const s of ['Left', 'Right']) {
       this.gripCur[s] += (this.grip[s] - this.gripCur[s]) * kf;
@@ -464,34 +539,35 @@ export class SkinnedCoach {
 
     this.root.updateMatrixWorld(true);
 
-    // 6. Επαφή με το έδαφος:
-    // - Σε IK-locked mode, οι πατούσες/παλάμες είναι ήδη στο y=0· εφαρμόζουμε μόνο προστασία
-    //   ώστε κανένα μέρος του σώματος (γόνατα, πύελος, πλάτη) να μην βυθίζεται κάτω από το y=0.
-    // - Σε ελεύθερες κινήσεις (π.χ. jumping jack, high knees), εδράζουμε το χαμηλότερο σημείο στο y=air.
+    // 7. Επαφή με το έδαφος χωρίς κατακόρυφες ταλαντώσεις:
+    // - Σε IK-locked mode, ελέγχουμε τα μη-καρφωμένα οστά ώστε πύελος/πλάτη/γόνατα/κεφάλι
+    //   να μην βυθίζονται ποτέ κάτω από το y = 0. Χρησιμοποιούμε την αλγεβρικά σταθερή σχέση
+    //   want = max(0, offY - minY) (= max(0, -rawMinY)) που έχει σταθερό σημείο χωρίς jitter!
     const contacts = [
       ['LeftToeBase', this.dims.toeHeight], ['RightToeBase', this.dims.toeHeight],
       ['LeftFoot', this.dims.footHeight * 0.92], ['RightFoot', this.dims.footHeight * 0.92],
       ['LeftHand', 0.022], ['RightHand', 0.022],
-      ['LeftLeg', 0.060], ['RightLeg', 0.060],
+      ['LeftLeg', 0.055], ['RightLeg', 0.055],
       ['Hips', 0.11], ['Spine2', 0.12], ['Head', 0.11],
-      ['LeftForeArm', 0.045], ['RightForeArm', 0.045],
+      ['LeftForeArm', 0.042], ['RightForeArm', 0.042],
     ];
     let minY = Infinity;
     for (let i = 0; i < contacts.length; i++) {
       const [n, r] = contacts[i];
       if (!this.b[n]) continue;
+      if (groundLock === 'ik' && pinnedBones.has(n)) continue;
       const y = this.worldPos(n, this._v2).y - r;
       if (y < minY) minY = y;
     }
 
     if (groundLock === 'ik') {
-      // Αν κάποιο σημείο βυθίζεται κάτω από το 0, ανασηκώνουμε απαλά· αλλιώς επανερχόμαστε στο 0
-      const rawNeed = minY < -0.004 ? this.offY - minY : 0;
-      const want = Math.max(0, rawNeed);
+      const want = Number.isFinite(minY) ? Math.max(0, this.offY - minY) : 0;
       this.offY += (want - this.offY) * (1 - Math.exp(-dt * 14));
-    } else {
+    } else if (Number.isFinite(minY)) {
       const want = this.offY - minY + air;
       this.offY += (want - this.offY) * (1 - Math.exp(-dt * 18));
     }
+
+    return resolvedMeta;
   }
 }
