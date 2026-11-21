@@ -64,7 +64,7 @@ export function sessionView(root) {
     try {
       if (!webglAvailable()) throw new Error('no webgl');
       const look = C.look === 'custom' && !customModel ? 'real' : C.look;
-      avatar = new Avatar(canvasBox, look, { customModel: customModel?.buf, onError: onModelError });
+      avatar = new Avatar(canvasBox, look, { customModel: customModel?.buf, onError: onModelError, quality: C.quality, env: C.env || 'studio' });
       avatar.pause(paused); prepare();
     } catch (e) {
       console.warn('3D μη διαθέσιμο', e);
@@ -104,7 +104,10 @@ export function sessionView(root) {
           h('button', { onclick: () => { markStart = vc.time(); updSeg(); } }, '⏺ Αρχή'),
           h('button', { onclick: () => { const t = vc.time(); if (markStart == null || t <= markStart + 0.5) return toast('Πάτα πρώτα «Αρχή» και μετά «Τέλος» στο τέλος της επανάληψης', 'error'); vc.setSeg(markStart, t); markStart = null; vc.demo(); updSeg(); toast('Αποθηκεύτηκε η επανάληψη', 'success'); } }, '⏹ Τέλος'),
           h('button', { onclick: () => vc.demo() }, '🔁 Δοκιμή'),
-          h('button', { onclick: () => vc.autoDetect(true) }, '🤖 Αυτόματα'))),
+          h('button', { onclick: () => vc.autoDetect(true) }, '🤖 Αυτόματα')),
+        h('div', { class: 'row', style: 'margin-top:8px;flex-wrap:nowrap' },
+          h('input', { type: 'url', id: 'yt-link', placeholder: '📎 Δικό σου link YouTube για αυτή την άσκηση' }),
+          h('button', { class: 'primary', onclick: async () => { try { await vc.useLink(root.querySelector('#yt-link').value); vc.demo(); toast('Το βίντεο ορίστηκε για την άσκηση', 'success'); } catch (e) { toast(e.message, 'error'); } } }, 'Χρήση'))),
       h('div', { style: 'margin-top:10px' }, toggle), altBox));
     updSeg();
   }

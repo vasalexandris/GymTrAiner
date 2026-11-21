@@ -71,6 +71,11 @@ function coachCard() {
       h('li', {}, 'Στο mixamo.com (δωρεάν λογαριασμός Adobe) διάλεξε χαρακτήρα και κάνε Download σε μορφή FBX, «T-Pose», χωρίς animation.'),
       h('li', {}, 'Μετάτρεψέ το σε .glb (π.χ. Blender: Import FBX → Export glTF Binary).'),
       h('li', {}, 'Ανέβασέ το εδώ. Μένει μόνο στον browser σου.')),
+    h('div', { class: 'grid c2', style: 'margin-bottom:12px' },
+      h('div', { class: 'field' }, h('label', {}, 'Ποιότητα γραφικών'), h('select', { onchange: e => { (state.settings.coach ||= {}).quality = e.target.value || undefined; save(); } },
+        [['', 'Αυτόματη (υψηλή σε PC, κανονική σε κινητό)'], ['high', 'Υψηλή (σκιές επαφής/ambient occlusion)'], ['normal', 'Κανονική (πιο γρήγορη)']].map(([v, l]) => h('option', { value: v, selected: (state.settings.coach?.quality || '') === v }, l)))),
+      h('div', { class: 'field' }, h('label', {}, 'Περιβάλλον'), h('select', { onchange: e => { (state.settings.coach ||= {}).env = e.target.value; save(); } },
+        [['studio', 'Φωτογραφικό στούντιο'], ['home', 'Σπίτι (ξύλινο πάτωμα)']].map(([v, l]) => h('option', { value: v, selected: (state.settings.coach?.env || 'studio') === v }, l))))),
     h('div', { class: 'row' }, h('label', { class: 'btn', style: 'margin:0;cursor:pointer;font-weight:400' }, '⬆ Ανέβασμα .glb', h('span', { hidden: true }, input)),
       h('button', { class: 'danger', onclick: async () => { await deleteCustomModel(); const C = state.settings.coach; if (C?.look === 'custom') { C.look = 'real'; save(); } toast('Διαγράφηκε'); refresh(); } }, 'Διαγραφή μοντέλου')),
     info);

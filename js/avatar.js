@@ -1,5 +1,9 @@
 import * as THREE from './vendor/three.module.min.js';
 import { RoomEnvironment } from './vendor/jsm/environments/RoomEnvironment.js';
+import { EffectComposer } from './vendor/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from './vendor/jsm/postprocessing/RenderPass.js';
+import { GTAOPass } from './vendor/jsm/postprocessing/GTAOPass.js';
+import { OutputPass } from './vendor/jsm/postprocessing/OutputPass.js';
 import { MOTIONS, mirror } from './motions.js';
 import { loadCoachModel } from './skinned.js';
 import { Equipment } from './equipment.js';
@@ -9,6 +13,8 @@ const KEYS = ['tx', 'hd', 'slx', 'slz', 'srx', 'srz', 'elL', 'elR', 'hlx', 'hlz'
 const STAND = Object.fromEntries(KEYS.map(k => [k, 0]));
 // ρυθμός ακολουθίας ανά άρθρωση (μεγαλύτερο = πιο γρήγορη ακολουθία). Τα άκρα καθυστερούν λίγο → φυσικότερη κίνηση.
 const RATE = { tx: 24, hd: 12, slx: 20, slz: 20, srx: 20, srz: 20, elL: 16, elR: 16, hlx: 28, hlz: 28, hrx: 28, hrz: 28, knL: 28, knR: 28, anL: 20, anR: 20, lift: 30, rrx: 28, rY: 30, rZ: 30 };
+// στροφή αντιβραχίου (rad) ανά προσανατολισμό παλάμης
+const TWIST = { up: 1.5, fwd: 1.25, flat: -1.45 };
 const sm = x => x * x * x * (x * (x * 6 - 15) + 10);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
@@ -40,6 +46,28 @@ function radialAlpha() {
   g.fillStyle = gr; g.fillRect(0, 0, 256, 256); return new THREE.CanvasTexture(c);
 }
 
+/** Καμπύλο ενιαίο φόντο φωτογραφικού στούντιο (cyclorama) */
+function cyclorama() {
+  const W = 16, floorLen = 6.5, R = 1.8, wallH = 6, arc = Math.PI / 2 * R, total = floorLen + arc + wallH, z0 = 4.5;
+  const g = new THREE.PlaneGeometry(W, total, 1, 90), pos = g.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), d = pos.getY(i) + total / 2; let y, z;
+    if (d <= floorLen) { z = z0 - d; y = 0; }
+    else if (d <= floorLen + arc) { const a = (d - floorLen) / R; z = z0 - floorLen - Math.sin(a) * R; y = R - Math.cos(a) * R; }
+    else { z = z0 - floorLen - R; y = R + (d - floorLen - arc); }
+    pos.setXYZ(i, x, y, z);
+  }
+  g.computeVertexNormals();
+  const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0xdfe3ea, roughness: 0.92, metalness: 0, side: THREE.DoubleSide, envMapIntensity: 0.5 }));
+  m.receiveShadow = true; return m;
+}
+
+/** Ποιότητα γραφικών: high (PC) ή normal (κινητά/αδύναμες συσκευές) */
+export function defaultQuality() {
+  const mobile = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) || Math.min(screen.width, screen.height) < 700;
+  return mobile ? 'normal' : 'high';
+}
+
 export function webglAvailable() {
   try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch { return false; }
 }
@@ -55,6 +83,7 @@ export class Avatar {
   constructor(container, look = 'real', opts = {}) {
     this.container = container; this.lookKey = LOOKS[look] ? look : 'real';
     const L0 = LOOKS[this.lookKey]; this.look = L0.proxy ? LOOKS[L0.proxy] : L0;
+    this.envKind = opts.env || 'studio'; this.quality = opts.quality || defaultQuality();
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.renderer.toneMappingExposure = 1.05;
@@ -72,6 +101,17 @@ export class Avatar {
     this.scene.add(sun);
     const rim = new THREE.DirectionalLight(0xbcd4ff, 1.1); rim.position.set(-3, 2.6, -2.8); this.scene.add(rim);
     this.build();
+    if (this.quality === 'high') {
+      const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 });
+      this.composer = new EffectComposer(this.renderer, rt);
+      this.composer.addPass(new RenderPass(this.scene, this.camera));
+      this.gtao = new GTAOPass(this.scene, this.camera, 1, 1);
+      this.gtao.blendIntensity = 0.9;
+      this.gtao.updateGtaoMaterial({ radius: 0.3, distanceExponent: 1.4, thickness: 1.2, scale: 1.25 });
+      this.composer.addPass(this.gtao);
+      this.composer.addPass(new OutputPass());
+      if (this.envKind !== 'studio') this.scene.background = new THREE.Color(0xdfe8f4);
+    } else { this.renderer.shadowMap.type = THREE.PCFShadowMap; }
     this.proxyMeshes = []; this.figure.traverse(o => { if (o.isMesh) this.proxyMeshes.push(o); });
     this.equip = new Equipment(this.scene); this.equipKey = '';
     this.cur = { ...STAND }; this.tgt = { ...STAND };
@@ -104,9 +144,14 @@ export class Avatar {
     const shoe = this.mat(0xf1f5f9, 0.5), sole = this.mat(0x334155, 0.9), dark = this.mat(0x1a1210, 0.4), white = this.mat(0xffffff, 0.3), lip = this.mat(0xb8574f, 0.5);
     const legMat = K.leggings ? bottom : skin;
 
-    // ξύλινο πάτωμα που «σβήνει» στις άκρες + σκιές
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(7, 7), new THREE.MeshStandardMaterial({ color: 0xbfa58c, map: woodTexture(), alphaMap: radialAlpha(), transparent: true, roughness: 0.5, metalness: 0, envMapIntensity: 0.6 }));
-    floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; this.scene.add(floor);
+    if (this.envKind === 'studio') {
+      this.scene.add(cyclorama());
+      const fill = new THREE.PointLight(0xffffff, 6, 9); fill.position.set(-2.4, 2.2, 2.6); this.scene.add(fill);
+    } else {
+      // ξύλινο πάτωμα «σπιτιού» που σβήνει στις άκρες
+      const floor = new THREE.Mesh(new THREE.PlaneGeometry(7, 7), new THREE.MeshStandardMaterial({ color: 0xbfa58c, map: woodTexture(), alphaMap: radialAlpha(), transparent: true, roughness: 0.5, metalness: 0, envMapIntensity: 0.6 }));
+      floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; this.scene.add(floor);
+    }
     this.figure = new THREE.Group(); this.figure.scale.setScalar(K.scale); this.scene.add(this.figure);
     this.sway = new THREE.Group(); this.figure.add(this.sway);
     this.hips = new THREE.Group(); this.sway.add(this.hips);
@@ -177,7 +222,10 @@ export class Avatar {
   resize() {
     const w = this.container.clientWidth || 300, h = this.container.clientHeight || 300;
     this.renderer.setSize(w, h, false); this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
+    if (this.composer) { this.composer.setPixelRatio(this.renderer.getPixelRatio()); this.composer.setSize(w, h); }
   }
+
+  draw() { if (this.composer) this.composer.render(); else this.renderer.render(this.scene, this.camera); }
 
   /** Κάδρωση: απόσταση κάμερας ώστε ο coach να γεμίζει την οθόνη ανάλογα με την κίνηση */
   frame() {
@@ -260,12 +308,13 @@ export class Avatar {
     const fr = this.frame(), kc = 1 - Math.exp(-dt * 2.5);
     this.camD += (fr.d - this.camD) * kc; this.camY += (fr.cy - this.camY) * kc;
     this.camera.position.set(0, this.camY + this.camD * 0.1, this.camD); this.camera.lookAt(0, this.camY, 0);
-    this.renderer.render(this.scene, this.camera);
+    this.draw();
   }
 
   /** Μεταφορά στο ρεαλιστικό μοντέλο + ενημέρωση εξοπλισμού */
   post(dt) {
     this.figure.updateMatrixWorld(true);
+    this.palmW = (this.palmW ?? 0) + ((this.mode === 'idle' ? 0 : 1) - (this.palmW ?? 0)) * Math.min(1, dt * 6);
     const q = new THREE.Quaternion(), Yv = new THREE.Vector3(0, 1, 0), Zv = new THREE.Vector3(0, 0, 1);
     const ax = (o, v) => v.clone().applyQuaternion(o.getWorldQuaternion(q));
     const wp = (o, x = 0, y = 0, z = 0) => o.localToWorld(new THREE.Vector3(x, y, z));
@@ -280,14 +329,21 @@ export class Avatar {
       for (const [S, a, l] of sides) {
         const sh = wp(a.sh), el = wp(a.el), hand = wp(a.el, 0, -L.fore, 0);
         T[S + 'Arm'] = { dir: el.clone().sub(sh), sec: ax(a.sh, Zv) };
-        T[S + 'ForeArm'] = { dir: hand.sub(el), sec: ax(a.el, Zv) };
+        const fdir = hand.sub(el), fsec = ax(a.el, Zv);
+        const tw = (TWIST[this.motion.palm] || 0) * this.palmW;
+        if (tw) fsec.applyAxisAngle(fdir.clone().normalize(), S === 'Left' ? tw : -tw); // πρηνισμός/υπτιασμός καρπού
+        T[S + 'ForeArm'] = { dir: fdir, sec: fsec };
         const hp = wp(l.hp), kn = wp(l.kn), an = wp(l.an), toe = wp(l.an, 0, -0.05, 0.14);
         T[S + 'UpLeg'] = { dir: kn.clone().sub(hp), sec: ax(l.hp, Zv) };
         T[S + 'Leg'] = { dir: an.clone().sub(kn), sec: ax(l.kn, Zv) };
         T[S + 'Foot'] = { dir: toe.sub(an), sec: ax(l.an, Yv) };
       }
+      if (this.motion.palm === 'flat' && this.palmW > 0.5) { // παλάμες επίπεδες στο πάτωμα, δάχτυλα προς το κεφάλι
+        const fwd = new THREE.Vector3(0, 0, 1).applyAxisAngle(Yv, this.yaw);
+        for (const [S] of sides) T[S + 'Hand'] = { dir: fwd.clone(), sec: new THREE.Vector3(0, -1, 0) };
+      }
       const hips = wp(this.hips).multiplyScalar(this.k);
-      this.skinned.setGrip(grip, grip);
+      const g2 = this.motion.palm === 'flat' ? 0.05 : grip; this.skinned.setGrip(g2, g2);
       this.skinned.drive(T, hips, dt, { air: this.motion === MOTIONS.jumping_jack ? this.cur.lift * this.k : 0 });
     }
     // χέρια/πόδια για τον εξοπλισμό
@@ -346,7 +402,7 @@ export class Avatar {
     for (let i = 0; i < 40; i++) { this.apply(this.cur, this.motion); this.living(0.1); this.post(0.1); }
     const fr = this.frame(); this.camD = fr.d; this.camY = fr.cy;
     this.camera.position.set(0, this.camY + this.camD * 0.1, this.camD); this.camera.lookAt(0, this.camY, 0);
-    this.renderer.render(this.scene, this.camera);
+    this.draw();
   }
 
   apply(p, m) {
@@ -376,7 +432,7 @@ export class Avatar {
   }
 
   dispose() {
-    this.disposed = true; cancelAnimationFrame(this.raf); this.ro.disconnect(); this.cancelPending(); this.equip.dispose(); this.env?.dispose();
+    this.disposed = true; this.composer?.dispose?.(); this.gtao?.dispose?.(); cancelAnimationFrame(this.raf); this.ro.disconnect(); this.cancelPending(); this.equip.dispose(); this.env?.dispose();
     this.skinned?.root.traverse(o => { if (o.material) Object.values(o.material).forEach(v => v?.isTexture && v.dispose()); });
     this.scene.traverse(o => { o.geometry?.dispose(); if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.dispose()); });
     this.renderer.dispose(); this.renderer.domElement.remove();

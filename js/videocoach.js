@@ -18,6 +18,13 @@ function loadYT() {
 
 const RATES = [0.5, 0.75, 1, 1.25, 1.5]; // ασφαλείς ταχύτητες YouTube
 const SPEECH_LEAD = 0.28; // δευτ.: η φωνή ξεκινά λίγο νωρίτερα ώστε να ακούγεται τη στιγμή που ολοκληρώνεται η κίνηση
+/** YouTube URL (watch, youtu.be, shorts, embed) ή σκέτο ID → videoId */
+export function parseYouTubeId(text) {
+  const t = String(text || '').trim();
+  const m = t.match(/(?:youtu\.be\/|[?&]v=|\/shorts\/|\/embed\/|\/live\/)([\w-]{11})/) || t.match(/^([\w-]{11})$/);
+  return m ? m[1] : null;
+}
+let quotaOut = false; // εξαντλήθηκε το ημερήσιο όριο Gemini → σταματάμε τις αυτόματες προσπάθειες
 const segOk = s => s && s.end > s.start && s.end - s.start >= 0.7 && s.end - s.start <= 9;
 
 /** Ζητά από το Gemini (που «βλέπει» βίντεο YouTube) τα όρια μίας καθαρής επανάληψης. */
@@ -68,8 +75,8 @@ export class VideoCoach {
       this.forQ = q; this.fromLib = true;
       this.list = [{ id: lib.id, title: lib.title, channel: lib.channel }]; this.idx = 0;
       const cur = state.videoSeg[lib.id];
-      if (!(cur?.src === 'user' && segOk(cur))) state.videoSeg[lib.id] = { start: lib.start, end: lib.end, conf: 1, src: 'lib' };
-      await this.mountPlayer(); return;
+      if (lib.start != null && !(cur?.src === 'user' && segOk(cur))) state.videoSeg[lib.id] = { start: lib.start, end: lib.end, conf: 1, src: 'lib' };
+      await this.mountPlayer(); if (!this.seg) this.autoDetect(); return;
     }
     if (next && this.fromLib) { this.forQ = ''; this.fromLib = false; } // ο χρήστης θέλει άλλο βίντεο → αναζήτηση
     if (this.forQ !== q) {
@@ -87,7 +94,22 @@ export class VideoCoach {
       this.idx = (this.idx + 1) % this.list.length; state.videoPick[ex.name] = this.id; save();
     }
     await this.mountPlayer();
-    if (!this.seg) this.autoDetect();
+    if (!this.seg) {
+      // όταν ο χρήστης «ξεφυλλίζει» βίντεο, ο εντοπισμός γίνεται μόνο αν μείνει σε αυτό (εξοικονόμηση αιτημάτων)
+      const id = this.id; clearTimeout(this.detT);
+      if (next) { this.onStatus('Αν σου αρέσει αυτό το βίντεο, μείνε σε αυτό — σε λίγο εντοπίζω την επανάληψη.'); this.detT = setTimeout(() => { if (this.id === id && !this.seg) this.autoDetect(); }, 6000); }
+      else this.autoDetect();
+    }
+  }
+
+  /** Δικό σου βίντεο (link) για την άσκηση */
+  async useLink(url) {
+    const id = parseYouTubeId(url);
+    if (!id) throw new Error('Δεν αναγνωρίστηκε link YouTube');
+    this.list = [{ id, title: 'Δικό μου βίντεο', channel: '' }, ...this.list.filter(v => v.id !== id)]; this.idx = 0;
+    state.videoPick[this.ex.name] = id; save();
+    await this.mountPlayer();
+    if (!this.seg) this.autoDetect(true); else record(this.ex, this.list[0], this.seg);
   }
 
   async mountPlayer() {
@@ -110,13 +132,15 @@ export class VideoCoach {
 
   async autoDetect(force = false) {
     const id = this.id, ex = this.ex; if (!id || (!force && this.detecting === id)) return;
+    if (quotaOut && !force) { this.onStatus('Το ημερήσιο όριο του Gemini εξαντλήθηκε — όρισε την επανάληψη με 🎯 (Αρχή/Τέλος).'); return; }
     this.detecting = id; this.onStatus('🤖 Εντοπίζω μία επανάληψη στο βίντεο…');
     try {
       const seg = await detectRep(id, ex);
       state.videoSeg[id] = seg; save(); record(ex, this.list.find(v => v.id === id), seg);
       if (id === this.id) { this.onStatus(''); this.setRate(); this.apply(); }
     } catch (e) {
-      if (id === this.id) this.onStatus('Δεν βρέθηκε αυτόματα η επανάληψη — ορισέ τη χειροκίνητα (🎯) ή άλλαξε βίντεο. ' + (e.message || ''));
+      if (/ημερήσιο όριο|quota|RESOURCE_EXHAUSTED|429/i.test(e.message || '')) quotaOut = true;
+      if (id === this.id) this.onStatus(quotaOut ? 'Το ημερήσιο όριο του Gemini εξαντλήθηκε — όρισε την επανάληψη με 🎯 (Αρχή/Τέλος).' : 'Δεν βρέθηκε αυτόματα η επανάληψη — όρισέ τη με 🎯 ή άλλαξε βίντεο. ' + (e.message || ''));
     } finally { if (this.detecting === id) this.detecting = null; }
   }
 

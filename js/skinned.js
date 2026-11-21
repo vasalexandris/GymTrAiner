@@ -49,6 +49,7 @@ export class SkinnedCoach {
       ['LeftArm', 'LeftForeArm', Z], ['LeftForeArm', 'LeftHand', Z], ['RightArm', 'RightForeArm', Z], ['RightForeArm', 'RightHand', Z],
       ['LeftUpLeg', 'LeftLeg', Z], ['LeftLeg', 'LeftFoot', Z], ['RightUpLeg', 'RightLeg', Z], ['RightLeg', 'RightFoot', Z],
       ...(this.b.LeftToeBase ? [['LeftFoot', 'LeftToeBase', Y], ['RightFoot', 'RightToeBase', Y]] : []),
+      ...(this.b.LeftHandMiddle1 ? [['LeftHand', 'LeftHandMiddle1', Y.clone().negate()], ['RightHand', 'RightHandMiddle1', Y.clone().negate()]] : []), // παλάμη προς τα κάτω σε T-pose
     ].map(([n, c, sec]) => {
       const dir = c ? ch(n, c) : Y.clone();
       return { n, restBasis: basis(dir, sec, new THREE.Quaternion()).invert() };
@@ -102,7 +103,7 @@ export class SkinnedCoach {
     }
     this.root.updateMatrixWorld(true);
     // επαφή με το έδαφος: το χαμηλότερο σημείο επαφής ακουμπά στο 0
-    const C = [['LeftToeBase', 0.025], ['RightToeBase', 0.025], ['LeftFoot', 0.075], ['RightFoot', 0.075], ['LeftHand', 0.035], ['RightHand', 0.035],
+    const C = [['LeftToeBase', 0.025], ['RightToeBase', 0.025], ['LeftFoot', 0.075], ['RightFoot', 0.075], ['LeftHand', 0.02], ['RightHand', 0.02],
       ['LeftLeg', 0.06], ['RightLeg', 0.06], ['Hips', 0.11], ['Spine2', 0.12], ['Head', 0.11], ['LeftForeArm', 0.045], ['RightForeArm', 0.045]];
     let min = Infinity;
     for (const [n, r] of C) { if (!this.b[n]) continue; const y = this.worldPos(n, this.tv2).y - r; if (y < min) min = y; }
