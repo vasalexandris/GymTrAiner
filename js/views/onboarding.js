@@ -2,6 +2,7 @@ import { h, toast, spinner, withLoading , mount} from '../ui.js';
 import { state, save } from '../store.js';
 import { geminiJSON, textPart } from '../api.js';
 import { SYSTEM, ASSESS_PROMPT } from '../prompts.js';
+import { GENRE_OPTIONS } from '../music.js';
 
 const EQUIP = ['Χωρίς εξοπλισμό', 'Αλτήρες', 'Λάστιχα αντίστασης', 'Kettlebell', 'Μπάρα έλξεων', 'Στρώμα γυμναστικής', 'Μπάρα & βάρη', 'Διάδρομος/ποδήλατο', 'Γυμναστήριο (πλήρες)'];
 const DAYS = ['Δευτέρα', 'Τρίτη', 'Τετάρτη', 'Πέμπτη', 'Παρασκευή', 'Σάββατο', 'Κυριακή'];
@@ -25,6 +26,8 @@ const STEPS = [
     { k: 'equipment', label: 'Τι εξοπλισμό έχεις;', type: 'multi', options: EQUIP },
     { k: 'days', label: 'Ποιες μέρες μπορείς να γυμνάζεσαι;', type: 'multi', options: DAYS },
     { k: 'minutes', label: 'Διάρκεια ανά προπόνηση (λεπτά)', type: 'select', options: ['20-30', '30-45', '45-60', '60-90'] },
+    { k: 'music_genres', label: '🎵 Τι μουσική σου αρέσει όταν γυμνάζεσαι; (διάλεξε όσες θες)', type: 'multi', options: GENRE_OPTIONS },
+    { k: 'music_artists', label: 'Αγαπημένοι καλλιτέχνες/τραγούδια (προαιρετικό)', type: 'text', ph: 'π.χ. Queen, Eminem, Μπάμπης Στόκας' },
     { k: 'likes', label: 'Τι σου αρέσει / τι αποφεύγεις;', type: 'textarea', ph: 'π.χ. μου αρέσει το HIIT, δεν θέλω τρέξιμο…' },
     { k: 'motivation', label: 'Διάθεση για γυμναστική σήμερα (1 = καθόλου, 5 = τέλεια)', type: 'range' },
   ] },
@@ -62,7 +65,7 @@ function renderField(f, data) {
     if (val == null) data[f.k] = 3;
     input = h('div', { class: 'row' }, h('input', { type: 'range', id: f.k, min: 1, max: 5, value: val ?? 3, oninput: e => { data[f.k] = +e.target.value; out.textContent = e.target.value; } }), out);
   } else {
-    input = h('input', { id: f.k, type: f.type, min: f.min, max: f.max, step: f.step, value: val ?? '', oninput: e => data[f.k] = f.type === 'number' && e.target.value !== '' ? +e.target.value : e.target.value });
+    input = h('input', { id: f.k, type: f.type, placeholder: f.ph || '', min: f.min, max: f.max, step: f.step, value: val ?? '', oninput: e => data[f.k] = f.type === 'number' && e.target.value !== '' ? +e.target.value : e.target.value });
   }
   return h('div', { class: 'field' }, h('label', { for: f.k }, f.label + (f.req ? ' *' : '')), input);
 }

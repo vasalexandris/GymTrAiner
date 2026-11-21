@@ -92,3 +92,14 @@ svg.chart{width:100%;height:auto}
   #toasts{bottom:84px}
   h1{font-size:1.4rem}
 }
+
+/* 3D coach */
+.session-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px;align-items:start}
+.stage{position:relative;border-radius:var(--radius);overflow:hidden;background:linear-gradient(180deg,#dbeafe,#e8edf5 60%,#cbd5e1);border:1px solid var(--line);aspect-ratio:4/3;box-shadow:var(--shadow)}
+@media (prefers-color-scheme: dark){.stage{background:linear-gradient(180deg,#1e293b,#0f172a 60%,#1e293b)}}
+.canvas-box{position:absolute;inset:0}
+.stage .badge{position:absolute;top:10px;left:10px;background:rgba(15,23,42,.75);color:#fff;padding:4px 10px;border-radius:999px;font-size:.8rem}
+.stage .counter{position:absolute;top:8px;right:14px;font-size:2.6rem;font-weight:800;color:var(--brand);text-shadow:0 1px 0 #fff8;font-variant-numeric:tabular-nums}
+.stage .caption{position:absolute;left:10px;right:10px;bottom:10px;background:rgba(15,23,42,.8);color:#fff;padding:10px 14px;border-radius:12px;text-align:center;font-size:1.05rem;min-height:2.6em;display:flex;align-items:center;justify-content:center}
+.alt-panel{margin-top:10px;padding:12px;border:1px dashed var(--line);border-radius:12px}
+@media (max-width:900px){.session-grid{grid-template-columns:1fr}.stage{aspect-ratio:1/1;max-height:62vh}}

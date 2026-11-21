@@ -29,6 +29,7 @@ export function contextText({ includePlans = false } = {}) {
   if (wo.length) parts.push('## Πρόσφατες προπονήσεις\n' + wo.map(x => `${x.date}: ${x.focus || x.day} (RPE ${x.rpe ?? '-'})`).join('\n'));
   if (s.medical.length) parts.push('## Ιατρικές εξετάσεις (περίληψη)\n' + s.medical.map(m =>
     `${m.date} ${m.name}: ${m.analysis.summary}\nΣυνέπειες προπόνησης: ${m.analysis.training_implications}\nΣυνέπειες διατροφής: ${m.analysis.nutrition_implications}`).join('\n'));
+  if (s.avoid?.length) parts.push('## Ασκήσεις που ο χρήστης ΔΕΝ μπορεί ή δεν θέλει να κάνει (απόφυγε τες και παρόμοιες)\n' + s.avoid.slice(-15).map(a => `- ${a.name}${a.reason ? ' — ' + a.reason : ''}`).join('\n'));
   if (includePlans && s.plan) parts.push('## Τρέχον πρόγραμμα γυμναστικής\n' + s.plan.days.map(d => `${d.day}: ${d.focus}`).join('; '));
   if (includePlans && s.meal) parts.push(`## Τρέχον πρόγραμμα διατροφής\n~${s.meal.daily_calories} kcal/ημέρα`);
   return parts.join('\n\n');
@@ -43,6 +44,17 @@ ${contextText()}
  "goals": [{"id":"g1","title":"...","why":"γιατί ταιριάζει σε αυτόν","target":"μετρήσιμος στόχος","timeframe":"π.χ. 12 εβδομάδες"}]
 }`;
 
+const MOTIONS = 'squat|lunge|hinge|pushup|plank|row|overhead_press|curl|lateral_raise|jumping_jack|high_knees|crunch|glute_bridge|calf_raise|generic';
+
+export const EXERCISE_SHAPE = `{
+     "name": "όνομα άσκησης στα ελληνικά", "sets": 3, "reps": "10-12 (ή π.χ. '30 δευτερόλεπτα' για ισομετρικές)", "rest_sec": 60,
+     "muscles": "κύριοι μύες", "equipment": "σώμα|αλτήρες|...",
+     "instructions": ["βήμα 1","βήμα 2","βήμα 3"], "common_mistakes": "...", "modification": "εναλλακτική αν υπάρχει πόνος/δυσκολία",
+     "motion": "ΕΝΑ από: ${MOTIONS} — η κίνηση της βιβλιοθήκης που μοιάζει περισσότερο (για το animation του coach)", "tempo_sec": 3,
+     "youtube_query": "όρος αναζήτησης YouTube για σωστή εκτέλεση (κατά προτίμηση αγγλικά, π.χ. 'goblet squat proper form')",
+     "music": {"style": "είδος μουσικής από όσα προτιμά ο χρήστης (music_genres) με ένταση ανάλογη της άσκησης", "bpm": 130, "search_query": "όρος αναζήτησης YouTube για μουσική προπόνησης"}
+   }`;
+
 const PLAN_SHAPE = `{
  "summary": "σύντομη περιγραφή και λογική του προγράμματος",
  "progression": "πώς προοδεύει ο χρήστης τις επόμενες εβδομάδες",
@@ -50,13 +62,7 @@ const PLAN_SHAPE = `{
  "days": [{
    "day": "Δευτέρα", "rest": false, "focus": "π.χ. Πλάτη & Δικέφαλοι", "duration_min": 45,
    "warmup": ["..."], "cooldown": ["..."],
-   "exercises": [{
-     "name": "όνομα άσκησης στα ελληνικά", "sets": 3, "reps": "10-12", "rest_sec": 60,
-     "muscles": "κύριοι μύες", "equipment": "σώμα|αλτήρες|...",
-     "instructions": ["βήμα 1","βήμα 2","βήμα 3"], "common_mistakes": "...", "modification": "εναλλακτική αν υπάρχει πόνος/δυσκολία",
-     "youtube_query": "όρος αναζήτησης YouTube για σωστή εκτέλεση (κατά προτίμηση αγγλικά, π.χ. 'goblet squat proper form')",
-     "music": {"style": "είδος μουσικής που ταιριάζει στην ένταση", "bpm": 130, "search_query": "όρος αναζήτησης YouTube για μουσική προπόνησης"}
-   }]
+   "exercises": [${EXERCISE_SHAPE}]
  }]
 }
 Συμπερίλαβε και τις 7 ημέρες· οι μέρες ανάπαυσης έχουν "rest": true, "exercises": [] και προαιρετικά ήπια δραστηριότητα στο "focus".`;
@@ -113,3 +119,13 @@ export const REVIEW_PROMPT = () => `Κάνε αξιολόγηση προόδου
 ## Στόχος για την επόμενη εβδομάδα
 Να είσαι ειλικρινής αλλά ενθαρρυντικός.
 ${contextText({ includePlans: true })}`;
+
+export const ALT_PROMPT = (ex, day, reason) => `Ο χρήστης δεν μπορεί ή δεν θέλει να κάνει την άσκηση «${ex.name}» (μύες: ${ex.muscles || '-'}, εξοπλισμός: ${ex.equipment || '-'}).
+Λόγος: ${reason || 'δεν δηλώθηκε'}.
+Πρότεινε ΜΙΑ εναλλακτική άσκηση που δουλεύει τους ίδιους μύες, δεν απαιτεί εξοπλισμό που δεν έχει, δεν έχει το πρόβλημα που περιγράφεται και ταιριάζει στον τραυματισμούς/περιορισμούς του. Κράτησε παρόμοια σετ/επαναλήψεις/ανάπαυση.
+ΜΗΝ προτείνεις: ${[...(ex.tried || []), ex.name].join(', ')}.
+Η μέρα είναι «${day.focus || day.day}» και περιλαμβάνει: ${(day.exercises || []).map(e => e.name).join(', ')}.
+${contextText()}
+
+Επίστρεψε ΜΟΝΟ JSON με μία άσκηση σε αυτή τη μορφή:
+${EXERCISE_SHAPE}`;

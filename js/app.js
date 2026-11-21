@@ -1,7 +1,8 @@
 import { h , mount} from './ui.js';
 import { onboarding, goalsView } from './views/onboarding.js';
 import { dashboardView } from './views/dashboard.js';
-import { workoutView, sessionView } from './views/workout.js';
+import { workoutView } from './views/workout.js';
+import { sessionView } from './views/session.js';
 import { nutritionView } from './views/nutrition.js';
 import { progressView } from './views/progress.js';
 import { medicalView } from './views/medical.js';

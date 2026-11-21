@@ -1,6 +1,7 @@
 import { h, toast , mount} from './ui.js';
 import { ytSearch, ytSearchUrl } from './api.js';
 import { state } from './store.js';
+import { musicQuery } from './music.js';
 
 function results(items, box) {
   mount(box, );
@@ -31,7 +32,7 @@ export function mediaButton(label, query, { music = false } = {}) {
 }
 
 export const videoBlock = ex => ex.youtube_query ? mediaButton('▶ Δες σωστή εκτέλεση', ex.youtube_query) : null;
-export const musicBlock = ex => ex.music?.search_query
-  ? h('div', {}, h('div', { class: 'small muted' }, `🎵 ${ex.music.style || ''}${ex.music.bpm ? ` · ~${ex.music.bpm} BPM` : ''}`),
-      mediaButton('🎧 Μουσική για αυτή την άσκηση', ex.music.search_query, { music: true }))
-  : null;
+export function musicBlock(ex, idx = 0) {
+  const m = musicQuery(ex, idx);
+  return m ? h('div', {}, h('div', { class: 'small muted' }, `🎵 ${m.label}`), mediaButton('🎧 Μουσική για αυτή την άσκηση', m.query, { music: true })) : null;
+}

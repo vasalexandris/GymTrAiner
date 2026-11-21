@@ -2,7 +2,8 @@
 const KEY = 'gymtrainer.v1';
 
 const defaults = () => ({
-  settings: { geminiKey: '', ytKey: '', model: 'gemini-flash-latest' },
+  settings: { geminiKey: '', ytKey: '', model: 'gemini-flash-latest', coach: { voice: true, speed: 1 } },
+  avoid: [],          // ασκήσεις που ο χρήστης δεν μπορεί/θέλει
   profile: null,
   assessment: null,   // {summary, strengths[], risks[], bmi}
   goals: [],          // προτάσεις AI
