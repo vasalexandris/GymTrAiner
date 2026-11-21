@@ -2,7 +2,7 @@
 const KEY = 'gymtrainer.v1';
 
 const defaults = () => ({
-  settings: { geminiKey: '', ytKey: '', model: 'gemini-2.5-flash' },
+  settings: { geminiKey: '', ytKey: '', model: 'gemini-flash-latest' },
   profile: null,
   assessment: null,   // {summary, strengths[], risks[], bmi}
   goals: [],          // προτάσεις AI
@@ -20,6 +20,7 @@ function load() {
     const raw = JSON.parse(localStorage.getItem(KEY));
     if (raw && typeof raw === 'object') {
       const d = defaults();
+      if (raw.settings?.model === 'gemini-2.5-flash') raw.settings.model = d.settings.model; // παλιό default
       return { ...d, ...raw, settings: { ...d.settings, ...raw.settings }, logs: { ...d.logs, ...raw.logs } };
     }
   } catch (e) { /* ignore */ }

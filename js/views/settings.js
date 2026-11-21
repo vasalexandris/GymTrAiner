@@ -1,6 +1,6 @@
 import { h, toast, download , mount} from '../ui.js';
 import { state, save, exportData, importData, resetAll } from '../store.js';
-import { gemini, textPart } from '../api.js';
+import { gemini, textPart, listModels } from '../api.js';
 
 export function settingsView(root) {
   const S = state.settings;
@@ -14,7 +14,18 @@ export function settingsView(root) {
       h('div', { class: 'field' }, h('label', { for: 'yk' }, 'YouTube Data API key (προαιρετικό)'), h('input', { id: 'yk', type: 'password', autocomplete: 'off', value: S.ytKey, placeholder: 'AIza…' }),
         h('div', { class: 'hint' }, 'Χωρίς key, τα κουμπιά βίντεο/μουσικής ανοίγουν αναζήτηση στο YouTube. Με key, παίζουν μέσα στην εφαρμογή. (Quota: ~100 αναζητήσεις/ημέρα· τα αποτελέσματα αποθηκεύονται.)')),
       h('div', { class: 'field' }, h('label', { for: 'md' }, 'Μοντέλο Gemini'), h('input', { id: 'md', value: S.model, list: 'models' }),
-        h('datalist', { id: 'models' }, ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-lite'].map(m => h('option', { value: m })))),
+        h('div', { class: 'hint' }, 'Τα «-latest» δείχνουν πάντα στο τρέχον μοντέλο. Αν εξαντληθεί το ημερήσιο όριο (δωρεάν πακέτο), δοκίμασε «flash-lite» — συνήθως έχει μεγαλύτερο όριο. Κάθε μοντέλο έχει δικό του όριο.'),
+        h('button', { type: 'button', style: 'margin-top:6px', onclick: async e => {
+          e.target.disabled = true;
+          try {
+            S.geminiKey = root.querySelector('#gk').value.trim();
+            const names = await listModels();
+            const dl = root.querySelector('#models'); dl.replaceChildren(...names.map(m => h('option', { value: m })));
+            status.textContent = `Βρέθηκαν ${names.length} μοντέλα — πάτα στο πεδίο και διάλεξε (ή σβήσε το κείμενο για να τα δεις).`;
+          } catch (err) { status.textContent = '❌ ' + err.message; }
+          e.target.disabled = false;
+        } }, '📋 Λίστα διαθέσιμων μοντέλων'),
+        h('datalist', { id: 'models' }, ['gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-pro-latest'].map(m => h('option', { value: m })))),
       h('div', { class: 'row' },
         h('button', { class: 'primary', onclick: () => { S.geminiKey = root.querySelector('#gk').value.trim(); S.ytKey = root.querySelector('#yk').value.trim(); S.model = root.querySelector('#md').value.trim() || 'gemini-2.5-flash'; save(); toast('Αποθηκεύτηκε', 'success'); } }, 'Αποθήκευση'),
         h('button', { onclick: async () => {
