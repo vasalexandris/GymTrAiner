@@ -250,10 +250,14 @@ export function sessionView(root) {
   }
 
   function finish() {
-    avatar?.idle(); phase = 'done'; counter.textContent = '🎉';
+    phase = 'done'; counter.textContent = '🎉'; badge.textContent = 'Τέλος προπόνησης';
+    // Ο coach χειροκροτεί (motion capture) — η σκηνή μένει πάνω από την κάρτα ολοκλήρωσης
+    if (avatar) { avatar.setMotion('generic'); avatar.setEquipment({}); avatar.celebrate(true); }
+    setCaption('👏 Μπράβο! Εξαιρετική δουλειά!');
     sp('Μπράβο! Τελείωσες την προπόνηση. Εξαιρετική δουλειά!', { interrupt: true });
     let rpe = 6;
     mount(root,
+      avatar && h('div', { class: 'stage-wrap' }, stage),
       h('div', { class: 'card empty' }, h('div', { class: 'ico' }, '🎉'), h('h2', {}, 'Μπράβο! Τελείωσες την προπόνηση'),
         h('div', { class: 'field', style: 'max-width:320px;margin:16px auto' }, h('label', {}, 'Πόσο δύσκολη ήταν; (1-10)'), h('input', { type: 'range', min: 1, max: 10, value: 6, oninput: e => rpe = +e.target.value })),
         h('button', { class: 'primary', onclick: () => { state.logs.workouts.push({ date: today(), day: day.day, focus: day.focus, rpe }); save(); cleanup(); toast('Καταγράφηκε!', 'success'); location.hash = '#/'; } }, 'Αποθήκευση')));

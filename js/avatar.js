@@ -471,6 +471,9 @@ export class Avatar {
     this.hairStyle = style || 'original';
     this.skinned?.setHair(this.hairStyle);
   }
+  /** Χειροκρότημα (τέλος προπόνησης) — motion capture αν υπάρχει */
+  celebrate(on = true) { this.celebrating = on; if (on) this.idle(); }
+
   setMotion(key) {
     this.motionKey = MOTIONS[key] ? key : 'generic';
     this.motion = MOTIONS[this.motionKey];
@@ -482,13 +485,14 @@ export class Avatar {
   }
 
   /** 'clip' αν η τρέχουσα άσκηση παίζει από motion capture, αλλιώς 'procedural' */
-  get motionSource() { return this.clip && this.skinned && (this.clipW ?? 0) > 0.5 ? 'clip' : 'procedural'; }
+  get motionSource() { return this.activeClip && this.activeClip === this.clip && this.skinned && (this.clipW ?? 0) > 0.5 ? 'clip' : 'procedural'; }
 
   /** Χρόνος μέσα στην κίνηση για την τρέχουσα φάση (κύκλος επανάληψης / στάση / έτοιμος) */
   _clipTime() {
     const c = this.clip;
-    if (this.mode === 'cycle') return c.repStart + Math.min(this.t / Math.max(this.dur, 0.01), 1) * c.period;
     if (this._debugMode) return c.repStart + (this._debugU || 0) * c.period * 0.5;
+    if (this.mode === 'cycle') return c.repStart + Math.min(this.t / Math.max(this.dur, 0.01), 1) * c.period;
+    if (this.mode === 'hold') return c.repStart + (this.t % c.period); // ισομετρική: η καταγραφή παίζει (αναπνοή, μικρο-κινήσεις)
     return c.repStart;
   }
   setEquipment(e) {
@@ -1841,9 +1845,25 @@ export class Avatar {
       // Οι κινήσεις motion capture είναι χωρίς βάρη: με αντικείμενο στα χέρια μένει η διαδικαστική (σωστή λαβή)
       const e = this.equip?.e || {};
       const handsBusy = !!(e.dumbbells || e.kettlebell || e.barbell || e.band || e.straps || e.goblet || e.singleDumbbell || e.jumpRope || e.pullupBar);
-      const wantClip = this.clip && !handsBusy && this.mode !== 'idle' ? 1 : 0;
-      this.clipW = (this.clipW ?? 0) + (wantClip - (this.clipW ?? 0)) * Math.min(1, dt * 6);
-      if (this.clip && this.clipW > 0.001) applyClip(this.skinned, this.clip, this._clipTime(), this.yaw, this.clipW);
+      if (!this._specialClips) {
+        this._specialClips = true;
+        getClip('_idle').then(c => { this.idleClip = c; });
+        getClip('_celebrate').then(c => { this.clapClip = c; });
+      }
+      // Επιλογή καταγραφής: χειροκρότημα → στάση ξεκούρασης (idle) → η κίνηση της άσκησης
+      let want = null, wt = 0;
+      if (this.celebrating && this.clapClip) { want = this.clapClip; wt = this.time; }
+      else if (this.mode === 'idle') { if (this.idleClip && !handsBusy && !this.motion.floor) { want = this.idleClip; wt = this.time; } }
+      else if (this.clip && !handsBusy) { want = this.clip; wt = this._clipTime(); }
+      // Ομαλή αλλαγή: σβήνει η προηγούμενη καταγραφή (μέσω της διαδικαστικής πόζας) και ανάβει η νέα
+      if (want !== this.activeClip) {
+        this.clipW = (this.clipW ?? 0) - Math.min(1, dt * 7);
+        if (this.clipW <= 0.02 || !this.activeClip) { this.clipW = 0; this.activeClip = want; }
+      } else {
+        this.clipW = (this.clipW ?? 0) + ((want ? 1 : 0) - (this.clipW ?? 0)) * Math.min(1, dt * 6);
+      }
+      const cl = this.activeClip;
+      if (cl && this.clipW > 0.001) applyClip(this.skinned, cl, cl === this.clip ? this._clipTime() : wt, this.yaw, this.clipW);
       this.skinned.updateHair(dt);
     } else {
       const res = this._resolveIK(null, this.motion, this.cur, wp, ax, cy, cz);

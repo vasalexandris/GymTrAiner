@@ -28,8 +28,10 @@
   <select id="mode">
     <option value="hipsHigh">η λεκάνη είναι ψηλά (καθίσματα, κάμψεις, άλματα)</option>
     <option value="headLow">το κεφάλι είναι χαμηλά (κοιλιακοί/sit-ups ξαπλωμένος)</option>
-    <option value="headHigh">το κεφάλι είναι ψηλά</option>
+    <option value="headHigh">το κεφάλι είναι ψηλά (όρθια θέση, π.χ. burpee)</option>
+    <option value="handsLow">τα χέρια είναι χαμηλά (π.χ. jumping jacks)</option>
   </select>
+  <label><input type="checkbox" id="inplace"> Επί τόπου (αφαίρεση μετακίνησης, π.χ. τρέξιμο/περπάτημα)</label>
   <p><button id="go">Μετατροπή</button></p>
   <div id="out"></div>
 </div>
@@ -44,7 +46,7 @@ const norm = n => n.replace(/^mixamorig\d*[:_]?/i, '');
 /** Μετατρέπει ArrayBuffer FBX σε «ανεξάρτητη από χαρακτήρα» κίνηση:
  *  για κάθε οστό, περιστροφή σε world space ΣΧΕΤΙΚΑ με το T-pose (D = W(t)·W_rest⁻¹)
  *  και θέση λεκάνης κανονικοποιημένη με το ύψος λεκάνης. Έτσι παίζει σε οποιοδήποτε μοντέλο Mixamo. */
-export async function convert(buf, { key, mode = 'hipsHigh', name = 'clip' } = {}) {
+export async function convert(buf, { key, mode = 'hipsHigh', name = 'clip', inPlace = false } = {}) {
   const obj = new FBXLoader().parse(buf, '');
   const clip = obj.animations[0];
   if (!clip) throw new Error('Το FBX δεν έχει κίνηση');
@@ -72,19 +74,22 @@ export async function convert(buf, { key, mode = 'hipsHigh', name = 'clip' } = {
     });
     hips.getWorldPosition(wv);
     hp.push(+((wv.x - restHips.x) / hipsH).toFixed(4), +((wv.y - floorY) / hipsH).toFixed(4), +((wv.z - restHips.z) / hipsH).toFixed(4));
-    sig.push(mode === 'hipsHigh' ? wv.y : head.getWorldPosition(new THREE.Vector3()).y);
+    const handY = (bones.find(b => norm(b.name) === 'LeftHand').getWorldPosition(new THREE.Vector3()).y + bones.find(b => norm(b.name) === 'RightHand').getWorldPosition(new THREE.Vector3()).y) / 2;
+    sig.push(mode === 'hipsHigh' ? wv.y : mode === 'handsLow' ? handY : head.getWorldPosition(new THREE.Vector3()).y);
   }
 
   // Οι κινήσεις Mixamo είναι μία επανάληψη σε loop. Η επανάληψη της εφαρμογής ξεκινά από τη «θέση εκκίνησης»
   // (π.χ. όρθια στα καθίσματα, πάνω θέση στις κάμψεις, ξαπλωμένη στους κοιλιακούς) και διαρκεί έναν πλήρη κύκλο.
-  const want = mode === 'headLow' ? -1 : 1;
+  const want = mode === 'headLow' || mode === 'handsLow' ? -1 : 1;
   const s = sig.map(v => want * v), hi = Math.max(...s), lo = Math.min(...s);
   const start = s.findIndex(v => v >= hi - (hi - lo) * 0.02);
   const isLoop = Math.abs(s[0] - s[n - 1]) < (hi - lo) * 0.08;
   const period = isLoop ? clip.duration : clip.duration - start / FPS;
   const peaks = [start];
+  // «Επί τόπου»: αφαιρούμε τη μετακίνηση της λεκάνης στο επίπεδο (π.χ. τρέξιμο προς τα εμπρός)
+  if (inPlace) for (let f = 0; f < n; f++) { hp[f * 3] = 0; hp[f * 3 + 2] = 0; }
   return {
-    format: 'gymtrainer-clip@1', name, key, fps: FPS, frames: n,
+    format: 'gymtrainer-clip@1', inPlace, name, key, fps: FPS, frames: n,
     bones: bones.map(b => norm(b.name)), q, hips: hp,
     repStart: +(start / FPS).toFixed(3), period: +period.toFixed(3), loop: isLoop, duration: +clip.duration.toFixed(3),
     peaks: peaks.map(p => +(p / FPS).toFixed(2)),
@@ -98,7 +103,7 @@ document.getElementById('go').onclick = async () => {
   out.textContent = '⏳ Μετατροπή…';
   try {
     const key = document.getElementById('key').value.trim() || 'generic';
-    const res = await convert(await f.arrayBuffer(), { key, mode: document.getElementById('mode').value, name: f.name.replace(/\.fbx$/i, '') });
+    const res = await convert(await f.arrayBuffer(), { key, mode: document.getElementById('mode').value, inPlace: document.getElementById('inplace').checked, name: f.name.replace(/\.fbx$/i, '') });
     const file = res.name.toLowerCase().replace(/[^a-z0-9]+/g, '_') + '.json';
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(res)], { type: 'application/json' })); a.download = file; a.textContent = '⬇ ' + file;
     out.innerHTML = `<p>Διάρκεια ${res.duration}s · επανάληψη από ${res.repStart}s, διάρκεια ${res.period}s · ${res.bones.length} οστά</p><p>Γραμμή για το data/motion-clips.json:<br><code>"${key}": { "src": "assets/anim/${file}" }</code></p>`;

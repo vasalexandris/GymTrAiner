@@ -1797,6 +1797,9 @@ export class Avatar {
     this.hairStyle = style || 'original';
     this.skinned?.setHair(this.hairStyle);
   }
+  /** Χειροκρότημα (τέλος προπόνησης) — motion capture αν υπάρχει */
+  celebrate(on = true) { this.celebrating = on; if (on) this.idle(); }
+
   setMotion(key) {
     this.motionKey = MOTIONS[key] ? key : 'generic';
     this.motion = MOTIONS[this.motionKey];
@@ -1808,13 +1811,14 @@ export class Avatar {
   }
 
   /** 'clip' αν η τρέχουσα άσκηση παίζει από motion capture, αλλιώς 'procedural' */
-  get motionSource() { return this.clip && this.skinned && (this.clipW ?? 0) > 0.5 ? 'clip' : 'procedural'; }
+  get motionSource() { return this.activeClip && this.activeClip === this.clip && this.skinned && (this.clipW ?? 0) > 0.5 ? 'clip' : 'procedural'; }
 
   /** Χρόνος μέσα στην κίνηση για την τρέχουσα φάση (κύκλος επανάληψης / στάση / έτοιμος) */
   _clipTime() {
     const c = this.clip;
-    if (this.mode === 'cycle') return c.repStart + Math.min(this.t / Math.max(this.dur, 0.01), 1) * c.period;
     if (this._debugMode) return c.repStart + (this._debugU || 0) * c.period * 0.5;
+    if (this.mode === 'cycle') return c.repStart + Math.min(this.t / Math.max(this.dur, 0.01), 1) * c.period;
+    if (this.mode === 'hold') return c.repStart + (this.t % c.period); // ισομετρική: η καταγραφή παίζει (αναπνοή, μικρο-κινήσεις)
     return c.repStart;
   }
   setEquipment(e) {
@@ -3167,9 +3171,25 @@ export class Avatar {
       // Οι κινήσεις motion capture είναι χωρίς βάρη: με αντικείμενο στα χέρια μένει η διαδικαστική (σωστή λαβή)
       const e = this.equip?.e || {};
       const handsBusy = !!(e.dumbbells || e.kettlebell || e.barbell || e.band || e.straps || e.goblet || e.singleDumbbell || e.jumpRope || e.pullupBar);
-      const wantClip = this.clip && !handsBusy && this.mode !== 'idle' ? 1 : 0;
-      this.clipW = (this.clipW ?? 0) + (wantClip - (this.clipW ?? 0)) * Math.min(1, dt * 6);
-      if (this.clip && this.clipW > 0.001) applyClip(this.skinned, this.clip, this._clipTime(), this.yaw, this.clipW);
+      if (!this._specialClips) {
+        this._specialClips = true;
+        getClip('_idle').then(c => { this.idleClip = c; });
+        getClip('_celebrate').then(c => { this.clapClip = c; });
+      }
+      // Επιλογή καταγραφής: χειροκρότημα → στάση ξεκούρασης (idle) → η κίνηση της άσκησης
+      let want = null, wt = 0;
+      if (this.celebrating && this.clapClip) { want = this.clapClip; wt = this.time; }
+      else if (this.mode === 'idle') { if (this.idleClip && !handsBusy && !this.motion.floor) { want = this.idleClip; wt = this.time; } }
+      else if (this.clip && !handsBusy) { want = this.clip; wt = this._clipTime(); }
+      // Ομαλή αλλαγή: σβήνει η προηγούμενη καταγραφή (μέσω της διαδικαστικής πόζας) και ανάβει η νέα
+      if (want !== this.activeClip) {
+        this.clipW = (this.clipW ?? 0) - Math.min(1, dt * 7);
+        if (this.clipW <= 0.02 || !this.activeClip) { this.clipW = 0; this.activeClip = want; }
+      } else {
+        this.clipW = (this.clipW ?? 0) + ((want ? 1 : 0) - (this.clipW ?? 0)) * Math.min(1, dt * 6);
+      }
+      const cl = this.activeClip;
+      if (cl && this.clipW > 0.001) applyClip(this.skinned, cl, cl === this.clip ? this._clipTime() : wt, this.yaw, this.clipW);
       this.skinned.updateHair(dt);
     } else {
       const res = this._resolveIK(null, this.motion, this.cur, wp, ax, cy, cz);
@@ -6110,8 +6130,10 @@ window.done = true;
   <select id="mode">
     <option value="hipsHigh">η λεκάνη είναι ψηλά (καθίσματα, κάμψεις, άλματα)</option>
     <option value="headLow">το κεφάλι είναι χαμηλά (κοιλιακοί/sit-ups ξαπλωμένος)</option>
-    <option value="headHigh">το κεφάλι είναι ψηλά</option>
+    <option value="headHigh">το κεφάλι είναι ψηλά (όρθια θέση, π.χ. burpee)</option>
+    <option value="handsLow">τα χέρια είναι χαμηλά (π.χ. jumping jacks)</option>
   </select>
+  <label><input type="checkbox" id="inplace"> Επί τόπου (αφαίρεση μετακίνησης, π.χ. τρέξιμο/περπάτημα)</label>
   <p><button id="go">Μετατροπή</button></p>
   <div id="out"></div>
 </div>
@@ -6126,7 +6148,7 @@ const norm = n => n.replace(/^mixamorig\d*[:_]?/i, '');
 /** Μετατρέπει ArrayBuffer FBX σε «ανεξάρτητη από χαρακτήρα» κίνηση:
  *  για κάθε οστό, περιστροφή σε world space ΣΧΕΤΙΚΑ με το T-pose (D = W(t)·W_rest⁻¹)
  *  και θέση λεκάνης κανονικοποιημένη με το ύψος λεκάνης. Έτσι παίζει σε οποιοδήποτε μοντέλο Mixamo. */
-export async function convert(buf, { key, mode = 'hipsHigh', name = 'clip' } = {}) {
+export async function convert(buf, { key, mode = 'hipsHigh', name = 'clip', inPlace = false } = {}) {
   const obj = new FBXLoader().parse(buf, '');
   const clip = obj.animations[0];
   if (!clip) throw new Error('Το FBX δεν έχει κίνηση');
@@ -6154,19 +6176,22 @@ export async function convert(buf, { key, mode = 'hipsHigh', name = 'clip' } = {
     });
     hips.getWorldPosition(wv);
     hp.push(+((wv.x - restHips.x) / hipsH).toFixed(4), +((wv.y - floorY) / hipsH).toFixed(4), +((wv.z - restHips.z) / hipsH).toFixed(4));
-    sig.push(mode === 'hipsHigh' ? wv.y : head.getWorldPosition(new THREE.Vector3()).y);
+    const handY = (bones.find(b => norm(b.name) === 'LeftHand').getWorldPosition(new THREE.Vector3()).y + bones.find(b => norm(b.name) === 'RightHand').getWorldPosition(new THREE.Vector3()).y) / 2;
+    sig.push(mode === 'hipsHigh' ? wv.y : mode === 'handsLow' ? handY : head.getWorldPosition(new THREE.Vector3()).y);
   }
 
   // Οι κινήσεις Mixamo είναι μία επανάληψη σε loop. Η επανάληψη της εφαρμογής ξεκινά από τη «θέση εκκίνησης»
   // (π.χ. όρθια στα καθίσματα, πάνω θέση στις κάμψεις, ξαπλωμένη στους κοιλιακούς) και διαρκεί έναν πλήρη κύκλο.
-  const want = mode === 'headLow' ? -1 : 1;
+  const want = mode === 'headLow' || mode === 'handsLow' ? -1 : 1;
   const s = sig.map(v => want * v), hi = Math.max(...s), lo = Math.min(...s);
   const start = s.findIndex(v => v >= hi - (hi - lo) * 0.02);
   const isLoop = Math.abs(s[0] - s[n - 1]) < (hi - lo) * 0.08;
   const period = isLoop ? clip.duration : clip.duration - start / FPS;
   const peaks = [start];
+  // «Επί τόπου»: αφαιρούμε τη μετακίνηση της λεκάνης στο επίπεδο (π.χ. τρέξιμο προς τα εμπρός)
+  if (inPlace) for (let f = 0; f < n; f++) { hp[f * 3] = 0; hp[f * 3 + 2] = 0; }
   return {
-    format: 'gymtrainer-clip@1', name, key, fps: FPS, frames: n,
+    format: 'gymtrainer-clip@1', inPlace, name, key, fps: FPS, frames: n,
     bones: bones.map(b => norm(b.name)), q, hips: hp,
     repStart: +(start / FPS).toFixed(3), period: +period.toFixed(3), loop: isLoop, duration: +clip.duration.toFixed(3),
     peaks: peaks.map(p => +(p / FPS).toFixed(2)),
@@ -6180,7 +6205,7 @@ document.getElementById('go').onclick = async () => {
   out.textContent = '⏳ Μετατροπή…';
   try {
     const key = document.getElementById('key').value.trim() || 'generic';
-    const res = await convert(await f.arrayBuffer(), { key, mode: document.getElementById('mode').value, name: f.name.replace(/\.fbx$/i, '') });
+    const res = await convert(await f.arrayBuffer(), { key, mode: document.getElementById('mode').value, inPlace: document.getElementById('inplace').checked, name: f.name.replace(/\.fbx$/i, '') });
     const file = res.name.toLowerCase().replace(/[^a-z0-9]+/g, '_') + '.json';
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(res)], { type: 'application/json' })); a.download = file; a.textContent = '⬇ ' + file;
     out.innerHTML = `<p>Διάρκεια ${res.duration}s · επανάληψη από ${res.repStart}s, διάρκεια ${res.period}s · ${res.bones.length} οστά</p><p>Γραμμή για το data/motion-clips.json:<br><code>"${key}": { "src": "assets/anim/${file}" }</code></p>`;
