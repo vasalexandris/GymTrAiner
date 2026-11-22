@@ -180,8 +180,10 @@ export function sessionView(root) {
     for (const step of (ex.instructions || []).slice(0, 3)) { if (ctl.skipIntro) break; await say(step); }
     for (set = 1; set <= ex.sets; set++) {
       hud(''); phase = 'count'; drawControls();
-      avatar?.ready(); vc?.freeze();
+      // Ο coach παίρνει θέση: αν είναι όρθιος και η άσκηση έχει μετάβαση (π.χ. όρθια → σανίδα), την παίζει όσο μιλάει
+      const enterP = avatar ? avatar.enterExercise() : null; vc?.freeze();
       await say(`Σετ ${set}. Ετοιμάσου!`);
+      if (enterP) { await enterP; chk(); await gate(); }
       for (const c of [3, 2, 1]) { hud(c); sp(countWord(c), { interrupt: true }); await wait(0.9); chk(); }
       phase = 'work'; drawControls(); say('Πάμε!', false);
       if (timed) await holdFlow(n, mk); else await repsFlow(ex, n, perSide, mk);
@@ -225,13 +227,13 @@ export function sessionView(root) {
   }
 
   async function restFlow(sec, toNext) {
-    phase = 'rest'; drawControls(); avatar?.idle(); vc?.freeze();
+    phase = 'rest'; drawControls(); avatar?.exitToRest(sec); vc?.freeze(); // σηκώνεται (μετάβαση) και ανασαίνει όρθιος
     say(toNext ? `Μπράβο! Τελειώσαμε την άσκηση. Ξεκούραση ${sec} δευτερόλεπτα.` : `Ωραία! Ξεκούραση ${sec} δευτερόλεπτα.`, false);
     let last = -1;
     await wait(sec, left => {
       if (left === last) return; last = left; counter.textContent = `😮‍💨 ${left}″`;
       if (left === 10 && sec > 15) { setCaption('Δέκα δευτερόλεπτα!'); sp('Δέκα δευτερόλεπτα', { interrupt: true }); }
-      if (left <= 3 && left > 0) { sp(countWord(left), { interrupt: true }); if (left === 3) avatar?.ready(); }
+      if (left <= 3 && left > 0) { sp(countWord(left), { interrupt: true }); }
     });
     chk();
   }
@@ -264,7 +266,7 @@ export function sessionView(root) {
   }
 
   async function start() {
-    started = true; drawControls();
+    started = true; drawControls(); avatar?.idle(); // όρθιος στις οδηγίες — παίρνει θέση στο «Ετοιμάσου»
     try { wake = await navigator.wakeLock?.request('screen'); } catch { /* ignore */ }
     main();
   }

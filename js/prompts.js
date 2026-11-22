@@ -51,7 +51,7 @@ ${contextText()}
  "goals": [{"id":"g1","title":"...","why":"γιατί ταιριάζει σε αυτόν","target":"μετρήσιμος στόχος","timeframe":"π.χ. 12 εβδομάδες"}]
 }`;
 
-const MOTIONS = 'squat|lunge|hinge|pushup|plank|row|overhead_press|curl|lateral_raise|jumping_jack|high_knees|crunch|glute_bridge|calf_raise|incline_row|bird_dog|generic';
+const MOTIONS = 'squat|lunge|hinge|pushup|plank|row|overhead_press|curl|lateral_raise|jumping_jack|high_knees|crunch|glute_bridge|calf_raise|incline_row|bird_dog|front_raise|generic';
 
 export const EXERCISE_SHAPE = `{
      "name": "όνομα άσκησης στα ελληνικά", "sets": 3, "reps": "10-12 (ή π.χ. '30 δευτερόλεπτα' για ισομετρικές)", "rest_sec": 60,

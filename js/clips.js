@@ -13,6 +13,17 @@ export function loadManifest() {
     .then(r => (r.ok ? r.json() : {})).then(j => j.clips || {}).catch(() => ({})));
 }
 
+/** Ρυθμίσεις καταγραφής από το manifest (π.χ. props, enter/exit μεταβάσεις) */
+export async function clipEntry(key) { return (await loadManifest())[key] || null; }
+
+/** Μετάβαση (enter: όρθια → θέση άσκησης, exit: θέση άσκησης → όρθια) για την άσκηση */
+export async function getTransition(key, kind) {
+  const src = (await loadManifest())[key]?.[kind];
+  if (!src) return null;
+  if (!cache.has(src)) cache.set(src, fetch(src).then(r => (r.ok ? r.json() : null)).then(d => (d?.format === 'gymtrainer-clip@1' ? prepare(d, { src }) : null)).catch(() => null));
+  return cache.get(src);
+}
+
 export async function getClip(key) {
   const man = await loadManifest();
   const entry = man[key];

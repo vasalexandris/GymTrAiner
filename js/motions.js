@@ -97,6 +97,7 @@ const curlA = P({ tx: 0.02, ...arms(-0.06, 0.07, -0.10), ...legs(-0.03, 0.06, 0.
 const curlB = P({ tx: 0.02, ...arms(-0.20, 0.06, -2.38), ...legs(-0.03, 0.06, 0.03) });
 
 const latA = P({ tx: 0.04, ...arms(-0.10, 0.10, -0.18), ...legs(-0.04, 0.08, 0.04) });
+const frB = P({ tx: 0.02, ...arms(-1.50, 0.12, -0.10), ...legs(-0.04, 0.08, 0.04) });
 const latB = P({ tx: 0.05, shL: 0.02, shR: 0.02, ...arms(-0.20, 1.44, -0.28), ...legs(-0.04, 0.08, 0.04) });
 
 const bandA = P({ tx: 0.03, ...arms(-1.52, -0.08, -0.14), ...legs(-0.04, 0.08, 0.04) });
@@ -353,6 +354,12 @@ export const MOTIONS = {
     A: latA, B: latB,
     keys: phases(latA, latB, { toB: 0.40, hold: 0.12, easeDown: 'out', easeUp: 'inOut' }),
     ik: { feet: 'planted', stanceW: 0.26, toeOut: 0.10, hands: 'free', forearmTwist: -0.35, elbowFlare: 0.70, grip: 'dumbbell', spine: 'neutral' },
+  },
+  front_raise: {
+    label: 'Μπροστινές ανυψώσεις', tempo: 3.0, prof: [0.40, 0.12, 0.48], yaw: 0.9,
+    A: latA, B: frB,
+    keys: phases(latA, frB, { toB: 0.40, hold: 0.12, easeDown: 'out', easeUp: 'inOut' }),
+    ik: { feet: 'planted', stanceW: 0.26, toeOut: 0.10, hands: 'free', forearmTwist: -1.2, elbowFlare: 0.2, grip: 'dumbbell', spine: 'neutral' },
   },
   jumping_jack: {
     label: 'Jumping jacks', tempo: 1.25, yaw: 0.20, noZ: true,
@@ -955,6 +962,7 @@ const RULES = [
   [/squat|καθισματα|καθισμα|σκουατ/i, 'squat'],
   [/row|κωπηλ|ελξ(η|εις)|pull/i, 'row'],
   [/overhead|shoulder\s*press|military|πιεσεις\s*ωμων|πρεσα\s*ωμων|arnold/i, 'overhead_press'],
+  [/front\s*raise|μπροστιν(ες|η|ή)\s*ανυψω|εμπρος\s*ανυψω|προσθι(ες|α)\s*ανυψω/i, 'front_raise'],
   [/lateral|πλαγι(α|ες)\s*ανυψω|side\s*raise/i, 'lateral_raise'],
   [/crunch|κοιλιακ|sit.?up/i, 'crunch'],
   [/bridge|γεφυρα|glute|γλουτ/i, 'glute_bridge'],

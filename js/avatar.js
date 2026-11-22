@@ -9,7 +9,7 @@ import { GTAOPass } from './vendor/jsm/postprocessing/GTAOPass.js';
 import { OutputPass } from './vendor/jsm/postprocessing/OutputPass.js';
 import { MOTIONS, POSE_KEYS, mirror, sampleCycle } from './motions.js';
 import { loadCoachModel } from './skinned.js';
-import { getClip, applyClip } from './clips.js';
+import { getClip, applyClip, clipEntry, getTransition } from './clips.js';
 import { Equipment, BARBELL_PLATE_R } from './equipment.js';
 import { clamp, lerp, smootherstep, clampPose, spineDistribution, applyAxialTwist, solveTwoBoneIK, basisFromDirSec } from './ik.js';
 
@@ -434,7 +434,9 @@ export class Avatar {
   /** Κάδρωση: απόσταση κάμερας ώστε ο coach να γεμίζει την οθόνη ανάλογα με την κίνηση */
   frame() {
     const m = this.motion;
-    const f = m.frame || (m.floor ? { h: 1.75, w: 2.55, cy: 0.38 } : { h: 2.30, w: 1.65, cy: 0.78 });
+    // Σε άσκηση εδάφους που ο coach στέκεται (ξεκούραση/μετάβαση), η κάμερα ανοίγει ώστε να χωρά όρθιος
+    const standingNow = m.floor && this.skinned && this.skinned.worldPos('Head').y > 1.0;
+    const f = standingNow ? { h: 2.30, w: 2.2, cy: 0.80 } : (m.frame || (m.floor ? { h: 1.75, w: 2.55, cy: 0.38 } : { h: 2.30, w: 1.65, cy: 0.78 }));
     const vf = THREE.MathUtils.degToRad(this.camera.fov);
     const hf = 2 * Math.atan(Math.tan(vf / 2) * this.camera.aspect);
     return { d: Math.max((f.h / 2) / Math.tan(vf / 2), (f.w / 2) / Math.tan(hf / 2)), cy: f.cy };
@@ -474,6 +476,41 @@ export class Avatar {
   /** Χειροκρότημα (τέλος προπόνησης) — motion capture αν υπάρχει */
   celebrate(on = true) { this.celebrating = on; if (on) this.idle(); }
 
+  /** Παίζει μια μετάβαση (καταγραφή μίας φοράς). Επιστρέφει Promise όταν τελειώσει. */
+  _playTransition(clip, speed = 1.25) {
+    if (!clip || !this.skinned) return Promise.resolve(false);
+    this._transDone?.(false);
+    return new Promise(res => { this.trans = { clip, t0: this.time, speed, key: Symbol('t') }; this._transDone = res; });
+  }
+
+  /** Πριν από ένα σετ: αν ο coach είναι όρθιος και η άσκηση έχει μετάβαση (π.χ. όρθια → σανίδα), την παίζει. */
+  async enterExercise() {
+    await this.clipReady;
+    const wasIdle = this.mode === 'idle' || this.celebrating;
+    this.celebrating = false;
+    const tr = wasIdle && this.clipAllowed() ? await getTransition(this.motionKey, 'enter') : null;
+    this.ready();
+    if (tr) await this._playTransition(tr);
+  }
+
+  /** Στην ξεκούραση: σηκώνεται με τη μετάβαση (αν υπάρχει) και μετά στέκεται/ανασαίνει.
+   *  Σε σύντομη ξεκούραση μένει στη θέση της άσκησης. */
+  async exitToRest(restSec = 60) {
+    if (restSec < 15 && this.mode !== 'idle') { this.ready(); return; }
+    const tr = this.mode !== 'idle' && this.clipAllowed() ? await getTransition(this.motionKey, 'exit') : null;
+    if (tr) { const p = this._playTransition(tr); this.idle(); await p; }
+    else this.idle();
+  }
+
+  /** Επιτρέπεται η καταγραφή με τον τρέχοντα εξοπλισμό; (καταγραφές με βάρη δηλώνουν "props") */
+  clipAllowed() {
+    if (!this.clip) return false;
+    const e = this.equip?.e || {};
+    const busy = !!(e.dumbbells || e.kettlebell || e.barbell || e.band || e.straps || e.goblet || e.singleDumbbell || e.jumpRope || e.pullupBar);
+    if (this.clipProps?.length) return this.clipProps.every(pr => e[pr]) && !e.singleDumbbell && !e.goblet;
+    return !busy;
+  }
+
   setMotion(key) {
     this.motionKey = MOTIONS[key] ? key : 'generic';
     this.motion = MOTIONS[this.motionKey];
@@ -481,7 +518,11 @@ export class Avatar {
     this._syncEquipment();
     // Κίνηση από motion capture (αν υπάρχει για αυτή την άσκηση) — αλλιώς η διαδικαστική
     const k = this.motionKey;
-    this.clip = null; this.clipReady = getClip(k).then(c => { if (this.motionKey === k) this.clip = c; return c; });
+    this.clip = null; this.clipProps = null;
+    this.clipReady = Promise.all([getClip(k), clipEntry(k)]).then(([c, en]) => {
+      if (this.motionKey === k) { this.clip = c; this.clipProps = en?.props || null; }
+      return c;
+    });
   }
 
   /** 'clip' αν η τρέχουσα άσκηση παίζει από motion capture, αλλιώς 'procedural' */
@@ -1841,8 +1882,7 @@ export class Avatar {
         skipHair: true,
       });
       if (resolvedMeta) meta = resolvedMeta;
-      // Motion capture πάνω από τη διαδικαστική πόζα, με ομαλή μετάβαση (idle → διαδικαστική στάση)
-      // Οι κινήσεις motion capture είναι χωρίς βάρη: με αντικείμενο στα χέρια μένει η διαδικαστική (σωστή λαβή)
+      // ---- Motion capture πάνω από τη διαδικαστική πόζα ----
       const e = this.equip?.e || {};
       const handsBusy = !!(e.dumbbells || e.kettlebell || e.barbell || e.band || e.straps || e.goblet || e.singleDumbbell || e.jumpRope || e.pullupBar);
       if (!this._specialClips) {
@@ -1850,20 +1890,36 @@ export class Avatar {
         getClip('_idle').then(c => { this.idleClip = c; });
         getClip('_celebrate').then(c => { this.clapClip = c; });
       }
-      // Επιλογή καταγραφής: χειροκρότημα → στάση ξεκούρασης (idle) → η κίνηση της άσκησης
-      let want = null, wt = 0;
-      if (this.celebrating && this.clapClip) { want = this.clapClip; wt = this.time; }
-      else if (this.mode === 'idle') { if (this.idleClip && !handsBusy && !this.motion.floor) { want = this.idleClip; wt = this.time; } }
-      else if (this.clip && !handsBusy) { want = this.clip; wt = this._clipTime(); }
-      // Ομαλή αλλαγή: σβήνει η προηγούμενη καταγραφή (μέσω της διαδικαστικής πόζας) και ανάβει η νέα
-      if (want !== this.activeClip) {
-        this.clipW = (this.clipW ?? 0) - Math.min(1, dt * 7);
-        if (this.clipW <= 0.02 || !this.activeClip) { this.clipW = 0; this.activeClip = want; }
-      } else {
-        this.clipW = (this.clipW ?? 0) + ((want ? 1 : 0) - (this.clipW ?? 0)) * Math.min(1, dt * 6);
+      // Μετάβαση σε εξέλιξη: ολοκληρώνεται όταν περάσει η διάρκειά της
+      const tr = this.trans;
+      if (tr && (this.time - tr.t0) * tr.speed >= tr.clip.duration - 0.02) { this.trans = null; const r = this._transDone; this._transDone = null; r?.(true); }
+      // Επιλογή καταγραφής (προτεραιότητα): μετάβαση → χειροκρότημα → ξεκούραση → κίνηση άσκησης
+      let want = null;
+      if (this.trans) { const T2 = this.trans; want = { key: T2.key, clip: T2.clip, time: () => Math.min((this.time - T2.t0) * T2.speed, T2.clip.duration - 0.02) }; }
+      else if (this.celebrating && this.clapClip) want = { key: 'clap', clip: this.clapClip, time: () => this.time };
+      else if (this.mode === 'idle') { if (this.idleClip && !handsBusy) want = { key: 'idle', clip: this.idleClip, time: () => this.time }; }
+      else if (this.clipAllowed()) want = { key: this.clip, clip: this.clip, time: () => this._clipTime() };
+      // Ομαλή μίξη (0.3 s) ανάμεσα σε καταγραφές — ή από/προς τη διαδικαστική πόζα όταν δεν υπάρχει καταγραφή
+      if ((want?.key ?? null) !== (this.trackCur?.key ?? null)) {
+        if (this.trackCur) this.trackPrev = { ...this.trackCur, w: this.trackFade ?? 1 };
+        this.trackCur = want; this.trackFade = 0;
       }
-      const cl = this.activeClip;
-      if (cl && this.clipW > 0.001) applyClip(this.skinned, cl, cl === this.clip ? this._clipTime() : wt, this.yaw, this.clipW);
+      this.trackFade = Math.min(1, (this.trackFade ?? 1) + dt / 0.3);
+      const fade = this.trackFade;
+      if (this.trackPrev) {
+        const pw = this.trackCur ? this.trackPrev.w : this.trackPrev.w * (1 - fade);
+        applyClip(this.skinned, this.trackPrev.clip, this.trackPrev.time(), this.yaw, pw);
+        if (fade >= 1) this.trackPrev = null;
+      }
+      if (this.trackCur) applyClip(this.skinned, this.trackCur.clip, this.trackCur.time(), this.yaw, this.trackPrev ? fade : Math.min(1, fade + (this.trackPrev ? 0 : 0)));
+      this.activeClip = this.trackCur?.clip || null;
+      this.clipW = this.trackCur ? fade : 0;
+      // Μπάρα στην πλάτη: με καταγραφή, ξανα-τοποθέτηση πάνω στον πραγματικό αυχένα
+      if (this.activeClip && meta.barPos && this.motionKey === 'back_squat') {
+        const sk = this.skinned, fw = new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
+        meta.barPos = sk.worldPos('Neck').lerp(sk.worldPos('Spine2'), 0.3).addScaledVector(fw, -0.075);
+        meta.barAxis = sk.worldPos('LeftArm').sub(sk.worldPos('RightArm')).normalize();
+      }
       this.skinned.updateHair(dt);
     } else {
       const res = this._resolveIK(null, this.motion, this.cur, wp, ax, cy, cz);

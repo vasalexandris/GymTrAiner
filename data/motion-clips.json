@@ -1,14 +1,19 @@
 {
-  "note": "Κινήσεις από motion capture ανά άσκηση. Δημιουργία με tools/clip-converter.html από αρχεία Mixamo (FBX). Όπου δεν υπάρχει, χρησιμοποιείται η χειροποίητη κίνηση. Κλειδιά με _ : ειδικές κινήσεις του coach.",
+  "note": "Κινήσεις από motion capture ανά άσκηση (Mixamo → tools/clip-converter.html). props: παίζει μόνο όταν ο coach κρατά αυτόν τον εξοπλισμό. enter/exit: μεταβάσεις όρθια ↔ θέση άσκησης. Κλειδιά με _ : ειδικές κινήσεις.",
   "clips": {
-    "squat":          { "src": "assets/anim/air_squat.json",      "from": "Mixamo — Air Squat" },
-    "pushup":         { "src": "assets/anim/push_up.json",        "from": "Mixamo — Push Up" },
-    "crunch":         { "src": "assets/anim/situps.json",         "from": "Mixamo — Situps" },
-    "plank":          { "src": "assets/anim/plank.json",          "from": "Mixamo — Plank" },
-    "bicycle_crunch": { "src": "assets/anim/bicycle_crunch.json", "from": "Mixamo — Bicycle Crunch" },
+    "squat":          { "src": "assets/anim/air_squat_bent_arms.json", "from": "Mixamo — Air Squat Bent Arms" },
+    "pushup":         { "src": "assets/anim/push_up.json",        "from": "Mixamo — Push Up",        "enter": "assets/anim/t_idle_to_pushup.json",  "exit": "assets/anim/t_pushup_to_idle.json" },
+    "crunch":         { "src": "assets/anim/situps.json",         "from": "Mixamo — Situps",         "enter": "assets/anim/t_idle_to_situp.json",   "exit": "assets/anim/t_situp_to_idle.json" },
+    "plank":          { "src": "assets/anim/plank.json",          "from": "Mixamo — Plank",          "enter": "assets/anim/t_idle_to_plank.json",   "exit": "assets/anim/t_plank_to_idle.json" },
+    "bicycle_crunch": { "src": "assets/anim/bicycle_crunch.json", "from": "Mixamo — Bicycle Crunch", "enter": "assets/anim/t_idle_to_bicycle.json", "exit": "assets/anim/t_bicycle_to_idle.json" },
     "jumping_jack":   { "src": "assets/anim/jumping_jacks.json",  "from": "Mixamo — Jumping Jacks" },
     "burpee":         { "src": "assets/anim/burpee.json",         "from": "Mixamo — Burpee", "repStart": 2.0 },
     "high_knees":     { "src": "assets/anim/jog_in_place.json",   "from": "Mixamo — Jog Forward (επί τόπου)" },
+    "skater_jump":    { "src": "assets/anim/quick_steps.json",    "from": "Mixamo — Quick Steps" },
+    "curl":           { "src": "assets/anim/bicep_curl.json",     "from": "Mixamo — Bicep Curl",      "props": ["dumbbells"] },
+    "front_raise":    { "src": "assets/anim/front_raises.json",   "from": "Mixamo — Front Raises",    "props": ["dumbbells"] },
+    "hinge":          { "src": "assets/anim/kettlebell_swing.json", "from": "Mixamo — Kettlebell Swing", "props": ["kettlebell"] },
+    "back_squat":     { "src": "assets/anim/back_squat.json",     "from": "Mixamo — Back Squat",      "props": ["barbell"] },
     "_idle":          { "src": "assets/anim/idle.json",           "from": "Mixamo — Idle (ξεκούραση)" },
     "_celebrate":     { "src": "assets/anim/clapping.json",       "from": "Mixamo — Clapping (τέλος προπόνησης)" }
   }

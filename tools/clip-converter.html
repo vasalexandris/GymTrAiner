@@ -29,6 +29,7 @@
     <option value="hipsHigh">η λεκάνη είναι ψηλά (καθίσματα, κάμψεις, άλματα)</option>
     <option value="headLow">το κεφάλι είναι χαμηλά (κοιλιακοί/sit-ups ξαπλωμένος)</option>
     <option value="headHigh">το κεφάλι είναι ψηλά (όρθια θέση, π.χ. burpee)</option>
+    <option value="once">μετάβαση — παίζει μία φορά ολόκληρη (π.χ. όρθια → σανίδα)</option>
     <option value="handsLow">τα χέρια είναι χαμηλά (π.χ. jumping jacks)</option>
   </select>
   <label><input type="checkbox" id="inplace"> Επί τόπου (αφαίρεση μετακίνησης, π.χ. τρέξιμο/περπάτημα)</label>
@@ -61,13 +62,13 @@ export async function convert(buf, { key, mode = 'hipsHigh', name = 'clip', inPl
   const floorY = foot.getWorldPosition(new THREE.Vector3()).y;
   const hipsH = restHips.y - floorY;
 
-  const mixer = new THREE.AnimationMixer(obj); mixer.clipAction(clip).play();
+  const mixer = new THREE.AnimationMixer(obj); const act = mixer.clipAction(clip); act.setLoop(THREE.LoopOnce); act.clampWhenFinished = true; act.play();
   const n = Math.max(2, Math.round(clip.duration * FPS) + 1);
   const q = [], hp = [], sig = [];
   const head = bones.find(b => norm(b.name) === 'Head');
   const wq = new THREE.Quaternion(), wv = new THREE.Vector3();
   for (let f = 0; f < n; f++) {
-    mixer.setTime(Math.min(f / FPS, clip.duration)); obj.updateMatrixWorld(true);
+    mixer.setTime(Math.min(f / FPS, clip.duration - 1e-4)); // χωρίς «τύλιγμα» του τελευταίου καρέ στην αρχή obj.updateMatrixWorld(true);
     bones.forEach((b, i) => {
       b.getWorldQuaternion(wq).multiply(rest[i].clone().invert());
       q.push(+wq.x.toFixed(4), +wq.y.toFixed(4), +wq.z.toFixed(4), +wq.w.toFixed(4));
@@ -81,17 +82,26 @@ export async function convert(buf, { key, mode = 'hipsHigh', name = 'clip', inPl
   // Οι κινήσεις Mixamo είναι μία επανάληψη σε loop. Η επανάληψη της εφαρμογής ξεκινά από τη «θέση εκκίνησης»
   // (π.χ. όρθια στα καθίσματα, πάνω θέση στις κάμψεις, ξαπλωμένη στους κοιλιακούς) και διαρκεί έναν πλήρη κύκλο.
   const want = mode === 'headLow' || mode === 'handsLow' ? -1 : 1;
-  const s = sig.map(v => want * v), hi = Math.max(...s), lo = Math.min(...s);
-  const start = s.findIndex(v => v >= hi - (hi - lo) * 0.02);
-  const isLoop = Math.abs(s[0] - s[n - 1]) < (hi - lo) * 0.08;
-  const period = isLoop ? clip.duration : clip.duration - start / FPS;
+  const s = sig.map(v => want * v), hi = Math.max(...s), lo = Math.min(...s), amp = Math.max(hi - lo, 1e-6);
+  let start, isLoop, period, reps;
+  if (mode === 'once') { // μετάβαση (π.χ. όρθια → σανίδα): παίζει μία φορά, ολόκληρη
+    start = 0; isLoop = false; period = clip.duration; reps = 1;
+  } else {
+    start = s.findIndex(v => v >= hi - amp * 0.02);
+    isLoop = Math.abs(s[0] - s[n - 1]) < amp * 0.08;
+    // Πόσες επαναλήψεις έχει η καταγραφή: κορυφές της «αρχικής θέσης» με ενδιάμεσο πραγματικό βάθος
+    reps = 0; let armed = false;
+    for (let i = 0; i < n; i++) { if (s[i] < hi - amp * 0.6) armed = true; else if (armed && s[i] >= hi - amp * 0.1) { reps++; armed = false; } }
+    reps = Math.max(1, reps);
+    period = (isLoop ? clip.duration : clip.duration - start / FPS) / reps;
+  }
   const peaks = [start];
   // «Επί τόπου»: αφαιρούμε τη μετακίνηση της λεκάνης στο επίπεδο (π.χ. τρέξιμο προς τα εμπρός)
   if (inPlace) for (let f = 0; f < n; f++) { hp[f * 3] = 0; hp[f * 3 + 2] = 0; }
   return {
     format: 'gymtrainer-clip@1', inPlace, name, key, fps: FPS, frames: n,
     bones: bones.map(b => norm(b.name)), q, hips: hp,
-    repStart: +(start / FPS).toFixed(3), period: +period.toFixed(3), loop: isLoop, duration: +clip.duration.toFixed(3),
+    repStart: +(start / FPS).toFixed(3), period: +period.toFixed(3), loop: isLoop, reps, duration: +clip.duration.toFixed(3),
     peaks: peaks.map(p => +(p / FPS).toFixed(2)),
   };
 }
