@@ -1,5 +1,5 @@
 # GymTrAIner — 3D coach code bundle
-Τα αρχεία του 3D coach. Δες `docs/3d-coach-handoff.md` για το prompt.
+Τα αρχεία του 3D coach. Δες `docs/3d-coach-round3.md` για το prompt του τρέχοντος γύρου.
 
 ## js/ik.js
 
@@ -801,57 +801,61 @@ export function sampleCycle(motion, t01, alt = false, out = {}) {
  * Κανόνες αναγνώρισης κίνησης από ελληνικά & αγγλικά ονόματα ασκήσεων.
  * Οι πιο εξειδικευμένοι κανόνες προηγούνται ώστε να μην «κλέβονται» από γενικούς.
  */
+/** Αφαίρεση τόνων: στα ελληνικά ο τόνος μετακινείται με την κλίση («δικέφαλος» → «δικεφάλων»),
+ *  οπότε οι κανόνες ταιριάζουν πάντα σε κείμενο χωρίς τόνους. */
+export const deaccent = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
 const RULES = [
-  [/mountain.?climb|ορειβάτ/i, 'mountain_climber'],
-  [/burpee|μπέρπι|μπερπι/i, 'burpee'],
-  [/dead.?bug|νεκρό\s*έντομ/i, 'dead_bug'],
-  [/bird.?dog|διαγώνια\s*έκταση|στα\s*τέσσερα|τετραποδ|quadruped|superman.*γόνατ/i, 'bird_dog'],
-  [/superman|σούπερμαν|σουπερμαν|υπερέκταση\s*ράχ|ραχιαί/i, 'superman'],
-  [/side\s*plank|πλάγια\s*σανίδ|πλαϊνή\s*σανίδ|πλάγιο\s*πλανκ/i, 'side_plank'],
-  [/russian\s*twist|ρωσικ|στροφές\s*κορμού/i, 'russian_twist'],
-  [/wall\s*sit|κάθισμα.*τοίχ|τοίχ.*κάθισμα|ισομετρικ.*κάθισμα/i, 'wall_sit'],
-  [/step.?up|box\s*step|ανέβασμα.*(σκαλ|κουτ|πάγκ|box)|σκαλοπάτ/i, 'step_up'],
-  [/hip\s*thrust|ώθησ.*ισχί|ωθήσ.*ισχί|ανύψωση\s*λεκάνης.*πάγκ/i, 'hip_thrust'],
-  [/reverse\s*lunge|οπίσθι.*(προβολ|εκπτώσ)|πίσω\s*(προβολ|εκπτώσ)/i, 'reverse_lunge'],
-  [/triceps?\s*dip|chair\s*dip|bench\s*dip|βυθίσ.*(τρικεφ|καρέκλ|πάγκ)|βουτι.*(τρικεφ|καρέκλ|πάγκ)|\bdips?\b/i, 'triceps_dip'],
-  [/band\s*pull.?apart|pull.?apart|διάνοιξη.*λάστιχ|ανοίγματα.*λάστιχ|άνοιγμα.*λάστιχ/i, 'band_pull_apart'],
-  [/(trx|ιμάντ|suspension).*(chest|push|press)|(chest|στήθ|πιέσ).*(trx|ιμάντ|suspension)/i, 'trx_chest_press'],
-  [/(trx|ιμάντ|suspension).*(squat|καθίσμ|σκουάτ)|(squat|καθίσμ|σκουάτ).*(trx|ιμάντ|suspension)/i, 'trx_squat'],
-  [/(trx|ιμάντ|suspension).*(row|κωπηλ|έλξ)|(row|κωπηλ|έλξ).*(trx|ιμάντ|suspension)|inverted\s*row|αντίστροφη\s*κωπηλ/i, 'incline_row'],
-  [/back\s*squat|barbell.*squat|κάθισμα.*μπάρα.*πλάτ|καθίσματα.*μπάρα|μπάρα.*πλάτ/i, 'back_squat'],
-  [/barbell.*row|bent.?over.*row|κωπηλατικ.*μπάρα|μπάρα.*κωπηλατικ/i, 'barbell_row'],
-  [/romanian|rdl|ρουμανικ|good.?morning|swing|hip\s*hinge|έλξη\s*ισχίου/i, 'hinge'],
-  [/deadlift|άρσ(η|εις)\s*θανάτ|νεκρ(ή|ές)\s*άρσ/i, 'deadlift'],
-  [/jumping|jack|ανοιχτά\s*άλματα|άλματα\s*ανοι/i, 'jumping_jack'],
-  [/high.?knee|ψηλά\s*γόνατα|τρέξιμο|jog|βάδην|march|skip/i, 'high_knees'],
-  [/push.?up|κάμψεις|κάμψη.*(στήριξη|ώμων|στήθ)|pushup/i, 'pushup'],
-  [/plank|σανίδα|πλανκ/i, 'plank'],
-  [/lunge|εκπτώσ|προβολ|split\s*squat/i, 'lunge'],
-  [/squat|καθίσματα|κάθισμα|σκουάτ/i, 'squat'],
-  [/row|κωπηλ|έλξη|pull/i, 'row'],
-  [/overhead|shoulder\s*press|military|πιέσεις\s*ώμων|πρέσα\s*ώμων|arnold/i, 'overhead_press'],
-  [/lateral|πλάγι(α|ες)\s*ανύψω|side\s*raise/i, 'lateral_raise'],
-  [/curl|δικέφαλ|biceps/i, 'curl'],
+  [/mountain.?climb|ορειβατ/i, 'mountain_climber'],
+  [/burpee|μπερπι|μπερπι/i, 'burpee'],
+  [/dead.?bug|νεκρο\s*εντομ/i, 'dead_bug'],
+  [/bird.?dog|διαγωνια\s*εκταση|στα\s*τεσσερα|τετραποδ|quadruped|superman.*γονατ/i, 'bird_dog'],
+  [/superman|σουπερμαν|σουπερμαν|υπερεκταση\s*ραχ|ραχιαι/i, 'superman'],
+  [/side\s*plank|πλαγια\s*σανιδ|πλαινη\s*σανιδ|πλαγιο\s*πλανκ/i, 'side_plank'],
+  [/russian\s*twist|ρωσικ|στροφες\s*κορμου/i, 'russian_twist'],
+  [/wall\s*sit|καθισμα.*τοιχ|τοιχ.*καθισμα|ισομετρικ.*καθισμα/i, 'wall_sit'],
+  [/step.?up|box\s*step|ανεβασμα.*(σκαλ|κουτ|παγκ|box)|σκαλοπατ/i, 'step_up'],
+  [/hip\s*thrust|ωθησ.*ισχι|ωθησ.*ισχι|ανυψωση\s*λεκανης.*παγκ/i, 'hip_thrust'],
+  [/reverse\s*lunge|οπισθι.*(προβολ|εκπτωσ)|πισω\s*(προβολ|εκπτωσ)/i, 'reverse_lunge'],
+  [/triceps?\s*dip|chair\s*dip|bench\s*dip|βυθισ.*(τρικεφ|καρεκλ|παγκ)|βουτι.*(τρικεφ|καρεκλ|παγκ)|\bdips?\b/i, 'triceps_dip'],
+  [/band\s*pull.?apart|pull.?apart|διανοιξη.*λαστιχ|ανοιγματα.*λαστιχ|ανοιγμα.*λαστιχ/i, 'band_pull_apart'],
+  [/(trx|ιμαντ|suspension).*(chest|push|press)|(chest|στηθ|πιεσ).*(trx|ιμαντ|suspension)/i, 'trx_chest_press'],
+  [/(trx|ιμαντ|suspension).*(squat|καθισμ|σκουατ)|(squat|καθισμ|σκουατ).*(trx|ιμαντ|suspension)/i, 'trx_squat'],
+  [/(trx|ιμαντ|suspension).*(row|κωπηλ|ελξ)|(row|κωπηλ|ελξ).*(trx|ιμαντ|suspension)|inverted\s*row|αντιστροφη\s*κωπηλ/i, 'incline_row'],
+  [/back\s*squat|barbell.*squat|καθισμα.*μπαρα.*πλατ|καθισματα.*μπαρα|μπαρα.*πλατ/i, 'back_squat'],
+  [/barbell.*row|bent.?over.*row|κωπηλατικ.*μπαρα|μπαρα.*κωπηλατικ/i, 'barbell_row'],
+  [/romanian|rdl|ρουμανικ|good.?morning|swing|hip\s*hinge|ελξη\s*ισχιου/i, 'hinge'],
+  [/deadlift|αρσ(η|εις)\s*θανατ|νεκρ(η|ες)\s*αρσ/i, 'deadlift'],
+  [/jumping|jack|ανοιχτα\s*αλματα|αλματα\s*ανοι/i, 'jumping_jack'],
+  [/high.?knee|ψηλα\s*γονατα|τρεξιμο|jog|βαδην|march|skip/i, 'high_knees'],
+  [/push.?up|καμψεις|καμψη.*(στηριξη|ωμων|στηθ)|pushup/i, 'pushup'],
+  [/plank|σανιδα|πλανκ/i, 'plank'],
+  [/lunge|εκπτωσ|προβολ|split\s*squat/i, 'lunge'],
+  [/squat|καθισματα|καθισμα|σκουατ/i, 'squat'],
+  [/row|κωπηλ|ελξη|pull/i, 'row'],
+  [/overhead|shoulder\s*press|military|πιεσεις\s*ωμων|πρεσα\s*ωμων|arnold/i, 'overhead_press'],
+  [/lateral|πλαγι(α|ες)\s*ανυψω|side\s*raise/i, 'lateral_raise'],
+  [/curl|δικεφαλ|biceps/i, 'curl'],
   [/crunch|κοιλιακ|sit.?up|bicycle|leg\s*raise/i, 'crunch'],
-  [/bridge|γέφυρα|glute|γλουτ/i, 'glute_bridge'],
-  [/calf|γάμπ|toe\s*raise/i, 'calf_raise'],
-  [/bench|στήθους|chest/i, 'generic'],
+  [/bridge|γεφυρα|glute|γλουτ/i, 'glute_bridge'],
+  [/calf|γαμπ|toe\s*raise/i, 'calf_raise'],
+  [/bench|στηθους|chest/i, 'generic'],
 ];
 
 export function inferMotion(ex) {
   let m = ex.motion && MOTIONS[ex.motion] ? ex.motion : null;
-  const eqText = `${ex.equipment || ''} ${ex.name || ''} ${ex.youtube_query || ''}`;
+  const eqText = deaccent(`${ex.equipment || ''} ${ex.name || ''} ${ex.youtube_query || ''}`);
   if (!m) {
-    const name = `${ex.name || ''} ${ex.youtube_query || ''}`;
+    const name = deaccent(`${ex.name || ''} ${ex.youtube_query || ''}`);
     m = (RULES.find(([re]) => re.test(name)) || [, 'generic'])[1];
   }
-  const hasTrx = /trx|ιμάντ|suspension/i.test(eqText);
-  const hasBar = /barbell|μπάρα(?!\s*(έλξ|ελξ|pull))|\bbar\b(?!\s*pull)/i.test(eqText);
+  const hasTrx = /trx|ιμαντ|suspension/i.test(eqText);
+  const hasBar = /barbell|μπαρα(?!\s*(ελξ|ελξ|pull))|\bbar\b(?!\s*pull)/i.test(eqText);
   if (hasTrx) {
     if (m === 'row') m = 'incline_row';
     else if (m === 'squat') m = 'trx_squat';
     else if (m === 'pushup' || m === 'generic') {
-      if (/chest|στήθ|press|πιέσ|push/i.test(eqText)) m = 'trx_chest_press';
+      if (/chest|στηθ|press|πιεσ|push/i.test(eqText)) m = 'trx_chest_press';
     }
   }
   if (hasBar) {
@@ -2902,13 +2906,14 @@ export class SkinnedCoach {
 // ιμάντες TRX με διακλάδωση Y, Ολυμπιακή μπάρα (δίσκοι 45cm), πάγκος, σκαλοπάτι και τοίχος.
 import * as THREE from './vendor/three.module.min.js';
 
+const da = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // χωρίς τόνους
 const RULES = {
-  straps: /trx|ιμάντ|suspension|strap|αιωρούμεν/i,
-  band: /λάστιχ|band|resistance|ελαστικ|λάστιχα|pull.?apart/i,
-  kettlebell: /kettle|κέτλ|κετλ/i,
-  barbell: /barbell|μπάρα(?!\s*(έλξ|ελξ|pull))|\bbar\b(?!\s*pull)/i,
-  dumbbells: /αλτήρ|dumbbell|\bdb\b|μπουκάλι/i,
-  mat: /στρώμα|mat\b|yoga|γιόγκα/i,
+  straps: /trx|ιμαντ|suspension|strap|αιωρουμεν/i,
+  band: /λαστιχ|band|resistance|ελαστικ|λαστιχα|pull.?apart/i,
+  kettlebell: /kettle|κετλ|κετλ/i,
+  barbell: /barbell|μπαρα(?!\s*(ελξ|ελξ|pull))|\bbar\b(?!\s*pull)/i,
+  dumbbells: /αλτηρ|dumbbell|\bdb\b|μπουκαλι/i,
+  mat: /στρωμα|mat\b|yoga|γιογκα/i,
 };
 
 const FLOOR_MOTIONS = [
@@ -2922,18 +2927,19 @@ const NO_HAND_WEIGHTS = [
 
 /** Επιστρέφει {dumbbells, kettlebell, band, straps, barbell, mat, goblet, bench, step, wall} για μια άσκηση. */
 export function equipmentFor(ex, motion) {
-  const eq = String(ex.equipment || '');
-  const text = `${eq} ${ex.name || ''} ${ex.youtube_query || ''}`;
-  const has = k => RULES[k].test(eq) || (k !== 'mat' && RULES[k].test(`${ex.name || ''} ${ex.youtube_query || ''}`));
+  const eq = da(ex.equipment);
+  const nm = da(`${ex.name || ''} ${ex.youtube_query || ''}`);
+  const text = `${eq} ${nm}`;
+  const has = k => RULES[k].test(eq) || (k !== 'mat' && RULES[k].test(nm));
   const e = {};
   for (const k of Object.keys(RULES)) if (has(k)) e[k] = true;
 
-  if (/σώμα|bodyweight|χωρίς/i.test(eq) && !/αλτήρ|λάστιχ|band|kettle|μπάρα/i.test(eq)) {
+  if (/σωμα|bodyweight|χωρις/i.test(eq) && !/αλτηρ|λαστιχ|band|kettle|μπαρα/i.test(eq)) {
     for (const k of ['dumbbells', 'kettlebell', 'barbell', 'band', 'straps']) {
-      if (!RULES[k].test(ex.name || '')) delete e[k];
+      if (!RULES[k].test(da(ex.name))) delete e[k];
     }
   }
-  if (/goblet|κύπελλο/i.test(text)) e.goblet = true;
+  if (/goblet|κυπελλο/i.test(text)) e.goblet = true;
 
   // Αυτόματη αντιστοίχιση εξοπλισμού βάσει εξειδικευμένων ασκήσεων
   if (motion === 'deadlift' || motion === 'back_squat' || motion === 'barbell_row') e.barbell = true;
@@ -3445,5 +3451,80 @@ export class Equipment {
     this.group.removeFromParent();
   }
 }
+
+```
+
+## gallery.html
+
+```html
+<!doctype html>
+<html lang="el">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GymTrAIner — Gallery κινήσεων</title>
+<style>
+  body{margin:0;font:14px system-ui,sans-serif;background:#eef2f7;color:#0f172a}
+  header{padding:12px 16px;background:#0f172a;color:#fff}
+  header a{color:#4ade80}
+  form{display:flex;flex-wrap:wrap;gap:8px;padding:12px 16px;background:#fff;border-bottom:1px solid #e2e8f0}
+  textarea{width:100%;min-height:60px;font:inherit}
+  input,select,button{font:inherit;padding:6px 10px}
+  #g{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:10px;padding:12px}
+  .cell{background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px #0002}
+  .view{height:300px;position:relative}
+  .lbl{padding:6px 10px;font-size:12px;border-top:1px solid #eee}
+  .lbl b{color:#16a34a}
+</style>
+<script type="importmap">{ "imports": { "three": "./js/vendor/three.module.min.js" } }</script>
+</head>
+<body>
+<header>🎬 <b>Gallery κινήσεων του 3D coach</b> — εργαλείο ελέγχου (θέση αρχής «0» και τέλους «1» κάθε κίνησης). <a href="./">← Εφαρμογή</a></header>
+<form id="f">
+  <div style="width:100%"><label>Ονόματα ασκήσεων (ένα ανά γραμμή, προαιρετικά «όνομα | εξοπλισμός»):</label>
+  <textarea name="ex" placeholder="Κωπηλατική με λάστιχο σε όρθια θέση | λάστιχο&#10;Κάμψεις στα γόνατα | στρώμα"></textarea></div>
+  <label>…ή κινήσεις (κλειδιά): <input name="m" size="40" placeholder="squat,pushup,plank"></label>
+  <label>Εξοπλισμός (για κλειδιά): <input name="eq" size="18" placeholder="dumbbells,mat"></label>
+  <label>Σελίδα <input name="page" type="number" min="1" value="1" style="width:60px"></label>
+  <button>Εμφάνιση</button>
+</form>
+<div id="g"></div>
+<script type="module">
+import { Avatar } from './js/avatar.js';
+import { MOTION_KEYS, inferMotion } from './js/motions.js';
+import { equipmentFor } from './js/equipment.js';
+
+const q = new URLSearchParams(location.search), f = document.getElementById('f');
+for (const k of ['ex', 'm', 'eq', 'page']) if (q.get(k)) f.elements[k].value = q.get(k);
+const PER = 4; // 4 ασκήσεις × 2 θέσεις = 8 WebGL contexts (όριο browser ~16)
+
+let items;
+if (q.get('ex')) {
+  items = q.get('ex').split('\n').map(l => l.trim()).filter(Boolean).map(l => {
+    const [name, equipment = ''] = l.split('|').map(s => s.trim());
+    const ex = { name, equipment }, m = inferMotion(ex);
+    return { title: name, m, eq: equipmentFor(ex, m) };
+  });
+} else {
+  const keys = q.get('m') ? q.get('m').split(',').map(s => s.trim()) : MOTION_KEYS;
+  const eq = q.get('eq') ? Object.fromEntries(q.get('eq').split(',').map(k => [k.trim(), true])) : null;
+  items = keys.map(m => ({ title: m, m, eq: eq || equipmentFor({ name: m }, m) }));
+}
+const page = Math.max(1, +(q.get('page') || 1)), slice = items.slice((page - 1) * PER, page * PER);
+const g = document.getElementById('g');
+if (items.length > PER) g.insertAdjacentHTML('beforebegin', `<p style="padding:0 16px">Σελίδα ${page}/${Math.ceil(items.length / PER)} — άλλαξε «Σελίδα» για τις υπόλοιπες.</p>`);
+
+for (const it of slice) for (const u of [0, 1]) {
+  const cell = document.createElement('div'); cell.className = 'cell';
+  const view = document.createElement('div'); view.className = 'view';
+  const lbl = document.createElement('div'); lbl.className = 'lbl';
+  lbl.innerHTML = `<b>${it.m}</b> · θέση ${u} · εξοπλισμός: ${Object.keys(it.eq).join(', ') || '—'}<br>${it.title.replace(/</g, '&lt;')}`;
+  cell.append(view, lbl); g.append(cell);
+  const a = new Avatar(view, 'real', { quality: 'normal' }); await a.loaded;
+  a.paused = true; cancelAnimationFrame(a.raf); a.debug(it.m, u, false, it.eq);
+}
+window.done = true;
+</script>
+</body>
+</html>
 
 ```

@@ -490,57 +490,61 @@ export function sampleCycle(motion, t01, alt = false, out = {}) {
  * Κανόνες αναγνώρισης κίνησης από ελληνικά & αγγλικά ονόματα ασκήσεων.
  * Οι πιο εξειδικευμένοι κανόνες προηγούνται ώστε να μην «κλέβονται» από γενικούς.
  */
+/** Αφαίρεση τόνων: στα ελληνικά ο τόνος μετακινείται με την κλίση («δικέφαλος» → «δικεφάλων»),
+ *  οπότε οι κανόνες ταιριάζουν πάντα σε κείμενο χωρίς τόνους. */
+export const deaccent = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
 const RULES = [
-  [/mountain.?climb|ορειβάτ/i, 'mountain_climber'],
-  [/burpee|μπέρπι|μπερπι/i, 'burpee'],
-  [/dead.?bug|νεκρό\s*έντομ/i, 'dead_bug'],
-  [/bird.?dog|διαγώνια\s*έκταση|στα\s*τέσσερα|τετραποδ|quadruped|superman.*γόνατ/i, 'bird_dog'],
-  [/superman|σούπερμαν|σουπερμαν|υπερέκταση\s*ράχ|ραχιαί/i, 'superman'],
-  [/side\s*plank|πλάγια\s*σανίδ|πλαϊνή\s*σανίδ|πλάγιο\s*πλανκ/i, 'side_plank'],
-  [/russian\s*twist|ρωσικ|στροφές\s*κορμού/i, 'russian_twist'],
-  [/wall\s*sit|κάθισμα.*τοίχ|τοίχ.*κάθισμα|ισομετρικ.*κάθισμα/i, 'wall_sit'],
-  [/step.?up|box\s*step|ανέβασμα.*(σκαλ|κουτ|πάγκ|box)|σκαλοπάτ/i, 'step_up'],
-  [/hip\s*thrust|ώθησ.*ισχί|ωθήσ.*ισχί|ανύψωση\s*λεκάνης.*πάγκ/i, 'hip_thrust'],
-  [/reverse\s*lunge|οπίσθι.*(προβολ|εκπτώσ)|πίσω\s*(προβολ|εκπτώσ)/i, 'reverse_lunge'],
-  [/triceps?\s*dip|chair\s*dip|bench\s*dip|βυθίσ.*(τρικεφ|καρέκλ|πάγκ)|βουτι.*(τρικεφ|καρέκλ|πάγκ)|\bdips?\b/i, 'triceps_dip'],
-  [/band\s*pull.?apart|pull.?apart|διάνοιξη.*λάστιχ|ανοίγματα.*λάστιχ|άνοιγμα.*λάστιχ/i, 'band_pull_apart'],
-  [/(trx|ιμάντ|suspension).*(chest|push|press)|(chest|στήθ|πιέσ).*(trx|ιμάντ|suspension)/i, 'trx_chest_press'],
-  [/(trx|ιμάντ|suspension).*(squat|καθίσμ|σκουάτ)|(squat|καθίσμ|σκουάτ).*(trx|ιμάντ|suspension)/i, 'trx_squat'],
-  [/(trx|ιμάντ|suspension).*(row|κωπηλ|έλξ)|(row|κωπηλ|έλξ).*(trx|ιμάντ|suspension)|inverted\s*row|αντίστροφη\s*κωπηλ/i, 'incline_row'],
-  [/back\s*squat|barbell.*squat|κάθισμα.*μπάρα.*πλάτ|καθίσματα.*μπάρα|μπάρα.*πλάτ/i, 'back_squat'],
-  [/barbell.*row|bent.?over.*row|κωπηλατικ.*μπάρα|μπάρα.*κωπηλατικ/i, 'barbell_row'],
-  [/romanian|rdl|ρουμανικ|good.?morning|swing|hip\s*hinge|έλξη\s*ισχίου/i, 'hinge'],
-  [/deadlift|άρσ(η|εις)\s*θανάτ|νεκρ(ή|ές)\s*άρσ/i, 'deadlift'],
-  [/jumping|jack|ανοιχτά\s*άλματα|άλματα\s*ανοι/i, 'jumping_jack'],
-  [/high.?knee|ψηλά\s*γόνατα|τρέξιμο|jog|βάδην|march|skip/i, 'high_knees'],
-  [/push.?up|κάμψεις|κάμψη.*(στήριξη|ώμων|στήθ)|pushup/i, 'pushup'],
-  [/plank|σανίδα|πλανκ/i, 'plank'],
-  [/lunge|εκπτώσ|προβολ|split\s*squat/i, 'lunge'],
-  [/squat|καθίσματα|κάθισμα|σκουάτ/i, 'squat'],
-  [/row|κωπηλ|έλξη|pull/i, 'row'],
-  [/overhead|shoulder\s*press|military|πιέσεις\s*ώμων|πρέσα\s*ώμων|arnold/i, 'overhead_press'],
-  [/lateral|πλάγι(α|ες)\s*ανύψω|side\s*raise/i, 'lateral_raise'],
-  [/curl|δικέφαλ|biceps/i, 'curl'],
+  [/mountain.?climb|ορειβατ/i, 'mountain_climber'],
+  [/burpee|μπερπι|μπερπι/i, 'burpee'],
+  [/dead.?bug|νεκρο\s*εντομ/i, 'dead_bug'],
+  [/bird.?dog|διαγωνια\s*εκταση|στα\s*τεσσερα|τετραποδ|quadruped|superman.*γονατ/i, 'bird_dog'],
+  [/superman|σουπερμαν|σουπερμαν|υπερεκταση\s*ραχ|ραχιαι/i, 'superman'],
+  [/side\s*plank|πλαγια\s*σανιδ|πλαινη\s*σανιδ|πλαγιο\s*πλανκ/i, 'side_plank'],
+  [/russian\s*twist|ρωσικ|στροφες\s*κορμου/i, 'russian_twist'],
+  [/wall\s*sit|καθισμα.*τοιχ|τοιχ.*καθισμα|ισομετρικ.*καθισμα/i, 'wall_sit'],
+  [/step.?up|box\s*step|ανεβασμα.*(σκαλ|κουτ|παγκ|box)|σκαλοπατ/i, 'step_up'],
+  [/hip\s*thrust|ωθησ.*ισχι|ωθησ.*ισχι|ανυψωση\s*λεκανης.*παγκ/i, 'hip_thrust'],
+  [/reverse\s*lunge|οπισθι.*(προβολ|εκπτωσ)|πισω\s*(προβολ|εκπτωσ)/i, 'reverse_lunge'],
+  [/triceps?\s*dip|chair\s*dip|bench\s*dip|βυθισ.*(τρικεφ|καρεκλ|παγκ)|βουτι.*(τρικεφ|καρεκλ|παγκ)|\bdips?\b/i, 'triceps_dip'],
+  [/band\s*pull.?apart|pull.?apart|διανοιξη.*λαστιχ|ανοιγματα.*λαστιχ|ανοιγμα.*λαστιχ/i, 'band_pull_apart'],
+  [/(trx|ιμαντ|suspension).*(chest|push|press)|(chest|στηθ|πιεσ).*(trx|ιμαντ|suspension)/i, 'trx_chest_press'],
+  [/(trx|ιμαντ|suspension).*(squat|καθισμ|σκουατ)|(squat|καθισμ|σκουατ).*(trx|ιμαντ|suspension)/i, 'trx_squat'],
+  [/(trx|ιμαντ|suspension).*(row|κωπηλ|ελξ)|(row|κωπηλ|ελξ).*(trx|ιμαντ|suspension)|inverted\s*row|αντιστροφη\s*κωπηλ/i, 'incline_row'],
+  [/back\s*squat|barbell.*squat|καθισμα.*μπαρα.*πλατ|καθισματα.*μπαρα|μπαρα.*πλατ/i, 'back_squat'],
+  [/barbell.*row|bent.?over.*row|κωπηλατικ.*μπαρα|μπαρα.*κωπηλατικ/i, 'barbell_row'],
+  [/romanian|rdl|ρουμανικ|good.?morning|swing|hip\s*hinge|ελξη\s*ισχιου/i, 'hinge'],
+  [/deadlift|αρσ(η|εις)\s*θανατ|νεκρ(η|ες)\s*αρσ/i, 'deadlift'],
+  [/jumping|jack|ανοιχτα\s*αλματα|αλματα\s*ανοι/i, 'jumping_jack'],
+  [/high.?knee|ψηλα\s*γονατα|τρεξιμο|jog|βαδην|march|skip/i, 'high_knees'],
+  [/push.?up|καμψεις|καμψη.*(στηριξη|ωμων|στηθ)|pushup/i, 'pushup'],
+  [/plank|σανιδα|πλανκ/i, 'plank'],
+  [/lunge|εκπτωσ|προβολ|split\s*squat/i, 'lunge'],
+  [/squat|καθισματα|καθισμα|σκουατ/i, 'squat'],
+  [/row|κωπηλ|ελξη|pull/i, 'row'],
+  [/overhead|shoulder\s*press|military|πιεσεις\s*ωμων|πρεσα\s*ωμων|arnold/i, 'overhead_press'],
+  [/lateral|πλαγι(α|ες)\s*ανυψω|side\s*raise/i, 'lateral_raise'],
+  [/curl|δικεφαλ|biceps/i, 'curl'],
   [/crunch|κοιλιακ|sit.?up|bicycle|leg\s*raise/i, 'crunch'],
-  [/bridge|γέφυρα|glute|γλουτ/i, 'glute_bridge'],
-  [/calf|γάμπ|toe\s*raise/i, 'calf_raise'],
-  [/bench|στήθους|chest/i, 'generic'],
+  [/bridge|γεφυρα|glute|γλουτ/i, 'glute_bridge'],
+  [/calf|γαμπ|toe\s*raise/i, 'calf_raise'],
+  [/bench|στηθους|chest/i, 'generic'],
 ];
 
 export function inferMotion(ex) {
   let m = ex.motion && MOTIONS[ex.motion] ? ex.motion : null;
-  const eqText = `${ex.equipment || ''} ${ex.name || ''} ${ex.youtube_query || ''}`;
+  const eqText = deaccent(`${ex.equipment || ''} ${ex.name || ''} ${ex.youtube_query || ''}`);
   if (!m) {
-    const name = `${ex.name || ''} ${ex.youtube_query || ''}`;
+    const name = deaccent(`${ex.name || ''} ${ex.youtube_query || ''}`);
     m = (RULES.find(([re]) => re.test(name)) || [, 'generic'])[1];
   }
-  const hasTrx = /trx|ιμάντ|suspension/i.test(eqText);
-  const hasBar = /barbell|μπάρα(?!\s*(έλξ|ελξ|pull))|\bbar\b(?!\s*pull)/i.test(eqText);
+  const hasTrx = /trx|ιμαντ|suspension/i.test(eqText);
+  const hasBar = /barbell|μπαρα(?!\s*(ελξ|ελξ|pull))|\bbar\b(?!\s*pull)/i.test(eqText);
   if (hasTrx) {
     if (m === 'row') m = 'incline_row';
     else if (m === 'squat') m = 'trx_squat';
     else if (m === 'pushup' || m === 'generic') {
-      if (/chest|στήθ|press|πιέσ|push/i.test(eqText)) m = 'trx_chest_press';
+      if (/chest|στηθ|press|πιεσ|push/i.test(eqText)) m = 'trx_chest_press';
     }
   }
   if (hasBar) {

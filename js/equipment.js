@@ -3,13 +3,14 @@
 // ιμάντες TRX με διακλάδωση Y, Ολυμπιακή μπάρα (δίσκοι 45cm), πάγκος, σκαλοπάτι και τοίχος.
 import * as THREE from './vendor/three.module.min.js';
 
+const da = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // χωρίς τόνους
 const RULES = {
-  straps: /trx|ιμάντ|suspension|strap|αιωρούμεν/i,
-  band: /λάστιχ|band|resistance|ελαστικ|λάστιχα|pull.?apart/i,
-  kettlebell: /kettle|κέτλ|κετλ/i,
-  barbell: /barbell|μπάρα(?!\s*(έλξ|ελξ|pull))|\bbar\b(?!\s*pull)/i,
-  dumbbells: /αλτήρ|dumbbell|\bdb\b|μπουκάλι/i,
-  mat: /στρώμα|mat\b|yoga|γιόγκα/i,
+  straps: /trx|ιμαντ|suspension|strap|αιωρουμεν/i,
+  band: /λαστιχ|band|resistance|ελαστικ|λαστιχα|pull.?apart/i,
+  kettlebell: /kettle|κετλ|κετλ/i,
+  barbell: /barbell|μπαρα(?!\s*(ελξ|ελξ|pull))|\bbar\b(?!\s*pull)/i,
+  dumbbells: /αλτηρ|dumbbell|\bdb\b|μπουκαλι/i,
+  mat: /στρωμα|mat\b|yoga|γιογκα/i,
 };
 
 const FLOOR_MOTIONS = [
@@ -23,18 +24,19 @@ const NO_HAND_WEIGHTS = [
 
 /** Επιστρέφει {dumbbells, kettlebell, band, straps, barbell, mat, goblet, bench, step, wall} για μια άσκηση. */
 export function equipmentFor(ex, motion) {
-  const eq = String(ex.equipment || '');
-  const text = `${eq} ${ex.name || ''} ${ex.youtube_query || ''}`;
-  const has = k => RULES[k].test(eq) || (k !== 'mat' && RULES[k].test(`${ex.name || ''} ${ex.youtube_query || ''}`));
+  const eq = da(ex.equipment);
+  const nm = da(`${ex.name || ''} ${ex.youtube_query || ''}`);
+  const text = `${eq} ${nm}`;
+  const has = k => RULES[k].test(eq) || (k !== 'mat' && RULES[k].test(nm));
   const e = {};
   for (const k of Object.keys(RULES)) if (has(k)) e[k] = true;
 
-  if (/σώμα|bodyweight|χωρίς/i.test(eq) && !/αλτήρ|λάστιχ|band|kettle|μπάρα/i.test(eq)) {
+  if (/σωμα|bodyweight|χωρις/i.test(eq) && !/αλτηρ|λαστιχ|band|kettle|μπαρα/i.test(eq)) {
     for (const k of ['dumbbells', 'kettlebell', 'barbell', 'band', 'straps']) {
-      if (!RULES[k].test(ex.name || '')) delete e[k];
+      if (!RULES[k].test(da(ex.name))) delete e[k];
     }
   }
-  if (/goblet|κύπελλο/i.test(text)) e.goblet = true;
+  if (/goblet|κυπελλο/i.test(text)) e.goblet = true;
 
   // Αυτόματη αντιστοίχιση εξοπλισμού βάσει εξειδικευμένων ασκήσεων
   if (motion === 'deadlift' || motion === 'back_squat' || motion === 'barbell_row') e.barbell = true;
