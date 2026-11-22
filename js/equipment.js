@@ -827,7 +827,8 @@ export class Equipment {
 
     if (o.mat) {
       o.mat.quaternion.copy(yawQ);
-      o.mat.position.set(0, 0, h.matZ || 0).applyQuaternion(yawQ).setY(0.004);
+      if (h.matRotY) o.mat.quaternion.multiply(_tmpQ2.setFromAxisAngle(_tmpU, h.matRotY));
+      o.mat.position.set(h.matX || 0, 0, h.matZ || 0).applyQuaternion(yawQ).setY(0.004);
     }
 
     if (o.bench) {

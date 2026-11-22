@@ -426,8 +426,8 @@ const lie = { rrx: -1.57, rY: 0.13, rZ: 0.06, ...legs(-0.84, 1.98, 0.05) };
 const crunchA = P({ ...lie, tx: 0.02, hd: 0.05, ...arms(-2.05, 0.72, -2.05) });
 const crunchB = P({ ...lie, tx: 0.76, hd: 0.28, ...arms(-1.95, 0.62, -2.05) });
 
-const bridgeA = P({ ...lie, ...arms(0.04, 0.18, -0.10) });
-const bridgeB = P({ ...lie, rrx: -1.96, rY: 0.37, rZ: 0.05, ...legs(-0.04, 1.70, 0.06), ...arms(0.42, 0.18, -0.10) });
+const bridgeA = P({ ...lie, rY: 0.125, rZ: 0.08, tx: 0.0, hd: 0.06, ...arms(0.04, 0.18, -0.08) });
+const bridgeB = P({ ...lie, rrx: -2.02, rY: 0.34, rZ: 0.04, tx: 0.04, hd: 0.44, ...legs(-0.06, 1.62, 0.06), ...arms(0.42, 0.18, -0.08) });
 
 const hipThrustA = P({ rrx: -1.06, rY: 0.22, rZ: 0.12, tx: 0.20, hd: 0.34, ...legs(-1.35, 1.88, 0.08), ...arms(-0.62, 0.18, -0.85) });
 const hipThrustB = P({ rrx: -1.56, rY: 0.44, rZ: 0.14, tx: 0.04, hd: 0.42, ...legs(-0.08, 1.56, 0.08), ...arms(-0.18, 0.18, -0.55) });
@@ -690,7 +690,7 @@ export const MOTIONS = {
       { t: 0.54, p: kneeB, ease: 'linear' },
       { t: 1.00, p: kneeA, ease: 'inOut' },
     ],
-    ik: { feet: 'free', hands: 'free', forearmTwist: 0, elbowFlare: 0.18, grip: 'relaxed', spine: 'neutral' },
+    ik: { feet: 'free', hands: 'free', forearmTwist: 0, elbowFlare: 0.18, grip: 'fist', spine: 'neutral' },
   },
   calf_raise: {
     label: 'Ανασηκώσεις γάμπας', tempo: 2.2, prof: [0.38, 0.22, 0.40], yaw: 0.78,
@@ -720,7 +720,7 @@ export const MOTIONS = {
     label: 'Γέφυρα γλουτών', tempo: 3.0, prof: [0.40, 0.20, 0.40], yaw: 1.25, floor: true,
     A: bridgeA, B: bridgeB,
     keys: phases(bridgeA, bridgeB, { toB: 0.40, hold: 0.20, easeDown: 'out', easeUp: 'inOut' }),
-    ik: { feet: 'bridge', stanceW: 0.28, toeOut: 0.12, hands: 'free', forearmTwist: -1.35, elbowFlare: 0.22, grip: 'open', spine: 'neutral' },
+    ik: { feet: 'bridge', stanceW: 0.28, toeOut: 0.12, hands: 'supine_mat', forearmTwist: -1.35, elbowFlare: 0.18, grip: 'floor', spine: 'neutral' },
   },
   incline_row: {
     label: 'Κωπηλατική με ιμάντες (TRX)', tempo: 3.0, prof: [0.40, 0.12, 0.48], yaw: 1.15, floor: true,
@@ -784,11 +784,11 @@ export const MOTIONS = {
     ik: { feet: 'free', hands: 'free', forearmTwist: -1.25, elbowFlare: 0.30, grip: 'open', spine: 'ext' },
   },
   side_plank: {
-    palm: 'flat', label: 'Πλάγια σανίδα', tempo: 3.0, yaw: 0.32, floor: true, hold: true, flatFeet: false,
+    palm: 'flat', label: 'Πλάγια σανίδα', tempo: 3.0, yaw: 0.25, floor: true, hold: true, flatFeet: false,
     frame: { h: 1.75, w: 2.35, cy: 0.46 },
     A: sidePlankP, B: sidePlankP,
     keys: [{ t: 0, p: sidePlankP }, { t: 1, p: sidePlankP }],
-    ik: { feet: 'side_plank', hands: 'side_plank', forearmTwist: -1.30, elbowFlare: 0.35, grip: 'floor', spine: 'neutral' },
+    ik: { feet: 'side_plank', hands: 'side_plank', forearmTwist: -1.30, elbowFlare: 0.35, grip: 'relaxed', spine: 'neutral' },
   },
   russian_twist: {
     label: 'Ρωσικές στροφές', tempo: 2.8, yaw: 0.55, floor: true,
@@ -972,11 +972,11 @@ export const MOTIONS = {
     ik: { feet: 'toe', stanceW: 0.24, hands: 'bench_push', handExtraW: 0.06, forearmTwist: -1.35, elbowFlare: 0.38, grip: 'chair', spine: 'neutral', prop: 'bench' },
   },
   knee_side_plank: {
-    palm: 'flat', label: 'Πλάγια σανίδα στα γόνατα', tempo: 3.0, yaw: 0.32, floor: true, hold: true, flatFeet: false,
+    palm: 'flat', label: 'Πλάγια σανίδα στα γόνατα', tempo: 3.0, yaw: 0.25, floor: true, hold: true, flatFeet: false,
     frame: { h: 1.70, w: 2.20, cy: 0.44 },
     A: kneeSidePlankP, B: kneeSidePlankP,
     keys: [{ t: 0, p: kneeSidePlankP }, { t: 1, p: kneeSidePlankP }],
-    ik: { feet: 'knee_side_plank', hands: 'side_plank', forearmTwist: -1.30, elbowFlare: 0.35, grip: 'floor', spine: 'neutral' },
+    ik: { feet: 'knee_side_plank', hands: 'side_plank', forearmTwist: -1.30, elbowFlare: 0.35, grip: 'relaxed', spine: 'neutral' },
   },
   plank_shoulder_tap: {
     palm: 'flat', label: 'Σανίδα με επαφή ώμων', tempo: 2.4, prof: [0.40, 0.16, 0.44], yaw: 0.92, floor: true, flatFeet: false, alt: true,
@@ -989,7 +989,7 @@ export const MOTIONS = {
     frame: { h: 1.85, w: 2.55, cy: 0.46 },
     A: legRaiseA, B: legRaiseB,
     keys: phases(legRaiseA, legRaiseB, { toB: 0.44, hold: 0.12, easeDown: 'out', easeUp: 'inOut' }),
-    ik: { feet: 'free', hands: 'free', forearmTwist: -1.35, elbowFlare: 0.18, grip: 'open', spine: 'flex' },
+    ik: { feet: 'free', hands: 'supine_mat', forearmTwist: -1.35, elbowFlare: 0.18, grip: 'floor', spine: 'flex' },
   },
   bicycle_crunch: {
     label: 'Ποδήλατο κοιλιακών', tempo: 2.0, prof: [0.44, 0.10, 0.46], yaw: 1.10, floor: true, flatFeet: false, alt: true,
@@ -2013,6 +2013,7 @@ export class Avatar {
       bandAnchorPos: null,
       bandSingleHandle: false,
       trxAnchor: null, benchZ: -0.40, benchX: 0, stepZ: 0.42, wallZ: -0.22, pullupZ: 0.04, ropeAngle: 0,
+      matRotY: 0, matX: 0,
     };
 
     if (this.mode === 'idle') {
@@ -2166,11 +2167,19 @@ export class Avatar {
       const hipsYHang = barY - armReach * 0.93 - torsoLen;
       const hipsYTop = barY - 0.14 - torsoLen;
       hipsPos = rotY(0, lerp(hipsYHang, hipsYTop, pull01), 0.04 - 0.04 * (1 - pull01));
+    } else if (feetMode === 'bridge' && handsMode === 'supine_mat') {
+      // Γέφυρα γλουτών: κεφάλι & ωμοπλάτες ΚΑΡΦΩΜΕΝΕΣ στο στρώμα (y=0.125, z=-0.36),
+      // μόνο η λεκάνη & η μέση περιστρέφονται προς τα πάνω σε ευθεία γραμμή ώμοι → ισχία → γόνατα!
+      groundLock = 'ik';
+      const shY = 0.125;
+      const shZ = -0.36;
+      const bridgeAng = clamp(-(cur.rrx + Math.PI * 0.5), 0, 0.52);
+      hipsPos = rotY(0, shY + torsoLen * Math.sin(bridgeAng), shZ + torsoLen * Math.cos(bridgeAng));
     } else if (feetMode === 'step_calf') {
       // Ανυψώσεις γάμπας σε σκαλί (stepZ=0.28 → σκαλί z=+0.06..+0.50, ύψος 0.34m, μύτες στο χείλος z=+0.11, φτέρνες έξω!)
       meta.stepZ = 0.28;
       const stepH = 0.34;
-      const liftH = cur.lift > 0.005 ? Math.min(cur.lift * kScale, 0.062) : -0.056;
+      const liftH = cur.lift > 0.005 ? Math.min(cur.lift * kScale, 0.052) : -0.056;
       hipsPos = rotY(0, standY + stepH + liftH, -0.01);
     } else if (feetMode === 'squat_jump') {
       if (cur.lift > 0.04) {
@@ -2191,13 +2200,16 @@ export class Avatar {
         meta.ropeAngle = 0.25; // σχοινάκι ψηλά πάνω από το κεφάλι στην προσγείωση!
       }
     } else if (feetMode === 'side_plank' || feetMode === 'knee_side_plank') {
+      // Πλάγια σανίδα (πλήρης / στα γόνατα): στρώμα κατά μήκος του σώματος (90°), ευθεία ώμος → ισχίο → γόνατο/πέλμα προς +X (δεξιά)!
       groundLock = 'ik';
+      meta.matRotY = Math.PI * 0.5;
+      meta.matX = 0.05;
       const theta = cur.rrz || (feetMode === 'knee_side_plank' ? 1.22 : 1.38);
       const shH = 0.042 + dims.lenArmR * 0.92;
       const hipYFromArm = shH - torsoLen * Math.cos(theta) + shHalfW * Math.sin(theta);
       const legEff = feetMode === 'knee_side_plank' ? dims.lenUpLegR : legReach;
-      const hipYFromLeg = 0.055 + legEff * Math.cos(theta) + dims.hipHalfW * Math.sin(theta);
-      const minY = feetMode === 'knee_side_plank' ? 0.31 : 0.28;
+      const hipYFromLeg = 0.060 + legEff * Math.cos(theta) + dims.hipHalfW * Math.sin(theta);
+      const minY = feetMode === 'knee_side_plank' ? 0.27 : 0.28;
       hipsPos = rotY(0, Math.max(minY, Math.min(hipYFromArm, hipYFromLeg)), 0);
     } else if (handsMode === 'deadlift_bar') {
       const dl01 = clamp(cur.rrx / 1.06, 0, 1);
@@ -2222,7 +2234,7 @@ export class Avatar {
     // ---- 1. IK ΠΟΔΙΩΝ (ΚΑΡΦΩΜΕΝΑ ΠΕΛΜΑΤΑ, ΓΟΝΑΤΑ ΣΤΟ ΣΤΡΩΜΑ/ΠΑΓΚΟ & ΑΛΜΑΤΑ) ----
     let footZ = ikSpec.footZ || 0;
     if (feetMode === 'wall_sit') footZ = -0.10 + dims.lenUpLegL * 0.96;
-    else if (feetMode === 'bridge') footZ = (cur.rZ || 0.06) + legReach * 0.56;
+    else if (feetMode === 'bridge') footZ = handsMode === 'supine_mat' ? (-0.36 + torsoLen + dims.lenUpLegL * 0.80) : ((cur.rZ || 0.06) + legReach * 0.56);
     else if (feetMode === 'hip_thrust') footZ = 0.14 + dims.lenUpLegL * 1.02;
     else if (feetMode === 'bench_press') footZ = 0.58;
 
@@ -2283,14 +2295,26 @@ export class Avatar {
           pin: true,
         };
       }
-    } else if (feetMode === 'knee_side_plank') {
-      // Πλάγια σανίδα στα γόνατα: γόνατα στο στρώμα, κνήμες λυγισμένες 90° πίσω
+    } else if (feetMode === 'side_plank') {
+      // Πλήρης πλάγια σανίδα: τεντωμένα πόδια εκτείνονται ευθεία προς +X (δεξιά) σε ευθυγράμμιση με τον κορμό!
       groundLock = 'ik';
-      const backDir = fwdW.clone().negate();
-      const theta = cur.rrz || 1.32;
-      const legEff = dims.lenUpLegR * 0.94;
-      const kneeX = -(hipsPos ? 0 : 0) - legEff * Math.sin(theta);
-      for (const [Side, sgn] of [['Left', 1], ['Right', -1]]) {
+      const theta = cur.rrz || 1.38;
+      const hipJoint = this.skinned ? this.skinned.rest.Hips.pos.distanceTo(this.skinned.rest.LeftUpLeg.pos) : 0.08;
+      const footX = (legReach * 0.97 + hipJoint * 0.5) * Math.sin(theta);
+      for (const [Side] of [['Left'], ['Right']]) {
+        const yF = Side === 'Right' ? 0.055 : 0.125;
+        const target = rotY(footX, yF, 0.02);
+        const pole = rotY(footX * 0.5, yF + 0.08, 0.35);
+        legs[Side] = { target, pole, mode: 'flat', footDir: fwdW, pin: true };
+      }
+    } else if (feetMode === 'knee_side_plank') {
+      // Πλάγια σανίδα στα γόνατα: μηροί εκτείνονται ευθεία προς +X (δεξιά!), γόνατα στο στρώμα, κνήμες λυγισμένες πίσω (-Z)
+      groundLock = 'ik';
+      const backDir = dirY(0.10, -0.04, -0.99);
+      const theta = cur.rrz || 1.22;
+      const hipJoint = this.skinned ? this.skinned.rest.Hips.pos.distanceTo(this.skinned.rest.LeftUpLeg.pos) : 0.08;
+      const kneeX = (dims.lenUpLegR * 0.94 + hipJoint * 0.45) * Math.sin(theta);
+      for (const [Side] of [['Left'], ['Right']]) {
         const yK = Side === 'Right' ? 0.055 : 0.135;
         legs[Side] = {
           mode: 'knee_direct',
@@ -2362,7 +2386,7 @@ export class Avatar {
       // Ανυψώσεις γάμπας σε σκαλί: μύτες καρφωμένες στο χείλος του σκαλιού (y=0.34m, z=+0.10), φτέρνες κάτω από το σκαλί στη φάση 0 και ψηλά στις μύτες στη φάση 1!
       groundLock = 'ik';
       const stepH = 0.34;
-      const liftH = cur.lift > 0.005 ? Math.min(cur.lift * kScale, 0.062) : -0.056;
+      const liftH = cur.lift > 0.005 ? Math.min(cur.lift * kScale, 0.052) : -0.056;
       for (const [Side, sgn] of [['Left', 1], ['Right', -1]]) {
         const fDir = dirY(Math.sin(sgn * 0.05), 0, Math.cos(sgn * 0.05));
         const toePos = rotY(sgn * stanceHalf, stepH + dims.toeHeight, 0.11);
@@ -2544,13 +2568,13 @@ export class Avatar {
             const tapTgt = oppSh.clone().addScaledVector(fwdW, 0.045).addScaledVector(_Y, -0.025);
             const target = floorTgt.clone().lerp(tapTgt, smootherstep(tap01));
             const pole = target.clone().addScaledVector(rightW, sgn * 0.22).addScaledVector(_Y, -0.25).addScaledVector(fwdW, -0.25);
-            aOut[Side] = { target, pole, forearmTwist: -1.15 };
+            aOut[Side] = { target, pole, forearmTwist: -1.15, gripStyle: 'relaxed' };
           } else {
             const pole = rotY(sgn * (handHalf + 0.38 * flare), 0.28, wristZ - 0.50);
             aOut[Side] = {
               target: floorTgt, pole,
               forearmTwist: -1.35, humeralTwist: 0.16,
-              handDir: fwdW.clone(), handPalm: _DOWN, pinFloor: true,
+              handDir: fwdW.clone(), handPalm: _DOWN, pinFloor: true, gripStyle: 'floor',
             };
           }
         }
@@ -2603,6 +2627,23 @@ export class Avatar {
             handDir: fwdW.clone(), handPalm: _DOWN,
           };
         }
+      } else if (handsMode === 'supine_mat') {
+        // Ύπτια στο στρώμα (γέφυρα γλουτών / ανυψώσεις ποδιών): χέρια τεντωμένα πλάι στο σώμα με παλάμες επίπεδες στο στρώμα!
+        const shL = getShL();
+        const shR = getShR();
+        for (const [Side, sgn] of [['Left', 1], ['Right', -1]]) {
+          const sh = Side === 'Left' ? shL : shR;
+          const target = sh.clone()
+            .addScaledVector(fwdW, armReach * 0.90)
+            .addScaledVector(rightW, sgn * 0.075);
+          target.y = 0.028;
+          const pole = target.clone().addScaledVector(fwdW, -0.40).addScaledVector(_Y, -0.15).addScaledVector(rightW, sgn * 0.08);
+          aOut[Side] = {
+            target, pole,
+            forearmTwist: -1.35,
+            handDir: fwdW.clone(), handPalm: _DOWN, pinFloor: true, gripStyle: 'floor',
+          };
+        }
       } else if (handsMode === 'bird_dog') {
         groundLock = 'ik';
         const wristZ = plankHandZ - palmLen * 0.35;
@@ -2611,14 +2652,15 @@ export class Avatar {
         if (leftPlanted) {
           const target = rotY(handHalf, 0.030, wristZ);
           const pole = rotY(handHalf + 0.10, 0.30, wristZ - 0.48);
-          aOut.Left = { target, pole, forearmTwist: -1.35, handDir: fwdW.clone(), handPalm: _DOWN, pinFloor: true };
+          aOut.Left = { target, pole, forearmTwist: -1.35, handDir: fwdW.clone(), handPalm: _DOWN, pinFloor: true, gripStyle: 'floor' };
         }
         if (rightPlanted) {
           const target = rotY(-handHalf, 0.030, wristZ);
           const pole = rotY(-handHalf - 0.10, 0.30, wristZ - 0.48);
-          aOut.Right = { target, pole, forearmTwist: -1.35, handDir: fwdW.clone(), handPalm: _DOWN, pinFloor: true };
+          aOut.Right = { target, pole, forearmTwist: -1.35, handDir: fwdW.clone(), handPalm: _DOWN, pinFloor: true, gripStyle: 'floor' };
         }
       } else if (handsMode === 'side_plank') {
+        // Κάτω χέρι (Right): αγκώνας & παλάμη επίπεδη στο στρώμα ('floor'), πάνω χέρι (Left): φυσικά χαλαρή παλάμη ('relaxed')
         const shR = getShR();
         const elbowOnMat = new THREE.Vector3(shR.x, 0.042, shR.z);
         const wristTgt = elbowOnMat.clone().addScaledVector(fwdW, dims.lenForeR * 0.94);
@@ -2626,7 +2668,7 @@ export class Avatar {
         aOut.Right = {
           target: wristTgt, pole,
           forearmTwist: -1.35,
-          handDir: fwdW.clone(), handPalm: _DOWN, pinFloor: true,
+          handDir: fwdW.clone(), handPalm: _DOWN, pinFloor: true, gripStyle: 'floor',
         };
       } else if (handsMode === 'chair_dip') {
         groundLock = 'ik';
@@ -2676,12 +2718,12 @@ export class Avatar {
           aOut[Side] = { target, pole, forearmTwist: -1.25 };
         }
       } else if (handsMode === 'one_arm_row') {
-        // Αριστερό χέρι (+X) καρφωμένο στον πάγκο, δεξί χέρι (-X) κωπηλατεί τον έναν αλτήρα
+        // Αριστερό χέρι (+X) επίπεδη παλάμη στον πάγκο ('floor'), δεξί χέρι (-X) σφιχτή λαβή στον αλτήρα ('dumbbell')
         aOut.Left = {
           target: rotY(0.18, 0.468, 0.34),
           pole: rotY(0.24, 0.62, -0.10),
           forearmTwist: -1.35,
-          handDir: fwdW.clone(), handPalm: _DOWN,
+          handDir: fwdW.clone(), handPalm: _DOWN, gripStyle: 'floor',
         };
         const shR = getShR();
         const pull01 = clamp((-cur.elR - 0.08) / 1.54, 0, 1);
@@ -2693,7 +2735,7 @@ export class Avatar {
           .addScaledVector(_Y, 0.25)
           .addScaledVector(fwdW, -0.52)
           .addScaledVector(rightW, -0.12);
-        aOut.Right = { target: targetR, pole: poleR, forearmTwist: 0 };
+        aOut.Right = { target: targetR, pole: poleR, forearmTwist: 0, gripStyle: 'dumbbell' };
       } else if (handsMode === 'kickback') {
         // Εκτάσεις τρικεφάλων: βραχίονες κολλημένοι παράλληλα στον κορμό, πήχεις εκτείνονται πίσω!
         const ext01 = clamp((1.68 + cur.elL) / 1.60, 0, 1);
@@ -3071,6 +3113,7 @@ export class Avatar {
       barPos: null, barAxis: null, barPad: false,
       bandMode: 'loop', bandAnchor: null, bandAnchorPos: null, bandSingleHandle: false,
       trxAnchor: null, benchZ: -0.40, benchX: 0, stepZ: 0.42, wallZ: -0.22, pullupZ: 0.04, ropeAngle: 0,
+      matRotY: 0, matX: 0,
     };
 
     if (this.skinned) {
@@ -3139,7 +3182,9 @@ export class Avatar {
       figure: this.figure,
       yaw: this.yaw,
       feet: {},
-      matZ: (this.cur.rZ || 0) * (this.k || 1) + (this.cur.rrx > 0.3 ? -0.22 : 0.10),
+      matZ: meta.matRotY ? 0 : ((this.cur.rZ || 0) * (this.k || 1) + (this.cur.rrx > 0.3 ? -0.22 : 0.10)),
+      matX: meta.matX || 0,
+      matRotY: meta.matRotY || 0,
       barPos: meta.barPos,
       barAxis: meta.barAxis,
       barPad: meta.barPad,
@@ -3373,14 +3418,15 @@ const FINGER_CASCADE = { Index: 0.90, Middle: 1.00, Ring: 1.08, Pinky: 1.16 };
 
 // Προφίλ κάμψης δαχτύλων [k1 (MCP), k2 (PIP), k3 (DIP), thumbCurl, thumbOppose]
 const GRIP_PROFILES = {
-  open:       [0.06, 0.08, 0.05, 0.05, 0.00],
-  floor:      [-0.06, 0.03, 0.03, 0.02, -0.14], // παλάμες ανοιχτές & επίπεδες στο έδαφος
-  relaxed:    [0.24, 0.34, 0.22, 0.16, 0.12],
-  chair:      [0.64, 0.80, 0.48, 0.20, 0.10],   // δάχτυλα αγκαλιάζουν την άκρη της καρέκλας
-  bar:        [1.18, 1.48, 1.02, 0.62, 0.58],   // σφιχτή λαβή μπάρας με αντίχειρα από πάνω
-  dumbbell:   [1.15, 1.44, 0.98, 0.58, 0.52],
-  kettlebell: [1.05, 1.32, 0.88, 0.48, 0.44],
-  trx:        [1.12, 1.40, 0.95, 0.55, 0.50],
+  open:       [0.28, 0.36, 0.24, 0.22, 0.18], // φυσικό ανοιχτό χέρι με ήπια ανατομική καμπύλη (όχι άκαμπτο)
+  floor:      [-0.04, 0.05, 0.05, 0.06, -0.06], // παλάμες ανοιχτές & επίπεδες στο στρώμα/τοίχο
+  relaxed:    [0.56, 0.74, 0.52, 0.38, 0.36], // φυσική χαλαρή καμπύλωση δαχτύλων σε ηρεμία / ελεύθερο χέρι
+  fist:       [1.18, 1.50, 1.08, 0.68, 0.64], // απαλή αθλητική γροθιά (προβολές, ψηλά γόνατα, τρέξιμο)
+  chair:      [0.72, 0.90, 0.58, 0.26, 0.18], // δάχτυλα αγκαλιάζουν την άκρη της καρέκλας/πάγκου
+  bar:        [1.34, 1.56, 1.14, 0.74, 0.68], // σφιχτή λαβή μπάρας/μονόζυγου/λαβής λάστιχου
+  dumbbell:   [1.32, 1.54, 1.10, 0.72, 0.64],
+  kettlebell: [1.20, 1.46, 1.00, 0.60, 0.54],
+  trx:        [1.28, 1.52, 1.06, 0.66, 0.60],
 };
 
 /**
@@ -3638,7 +3684,8 @@ export class SkinnedCoach {
         if (!this.b[n]) continue;
         const invW = this.rest[n].world.clone().invert();
         const ax = new THREE.Vector3(0, 0, side === 'Left' ? -1 : 1).applyQuaternion(invW);
-        const oppAx = new THREE.Vector3(0, side === 'Left' ? -1 : 1, 0).applyQuaternion(invW);
+        // Άξονας αντίθεσης αντίχειρα (προς το εσωτερικό της παλάμης, όχι προς τα έξω!)
+        const oppAx = new THREE.Vector3(0, side === 'Left' ? 1 : -1, 0).applyQuaternion(invW);
         this.fingers.push({ bone: this.b[n], local: this.rest[n].local, ax, oppAx, side, k, thumb: true });
       }
     }
@@ -3914,25 +3961,27 @@ export class SkinnedCoach {
       }
     }
 
-    // 6. Ρεαλιστική άρθρωση δαχτύλων (8 προφίλ ανά εξοπλισμό / έδαφος)
-    const kf = 1 - Math.exp(-dt * 11);
+    // 6. Ρεαλιστική άρθρωση δαχτύλων ανά χέρι (υποστηρίζει ανεξάρτητο προφίλ Left/Right, π.χ. side plank, one-arm row)
+    const kf = 1 - Math.exp(-dt * 12);
     for (const s of ['Left', 'Right']) {
       this.gripCur[s] += (this.grip[s] - this.gripCur[s]) * kf;
-      const targetProf = GRIP_PROFILES[this.gripStyle[s]] || GRIP_PROFILES.relaxed;
+      const armOverride = ik?.arms?.[s]?.gripStyle;
+      const effStyle = (armOverride && GRIP_PROFILES[armOverride]) ? armOverride : this.gripStyle[s];
+      const targetProf = GRIP_PROFILES[effStyle] || GRIP_PROFILES.relaxed;
       const curProf = this.gripProfCur[s];
       for (let j = 0; j < 5; j++) curProf[j] += (targetProf[j] - curProf[j]) * kf;
     }
     for (let i = 0; i < this.fingers.length; i++) {
       const f = this.fingers[i];
       const prof = this.gripProfCur[f.side];
-      const scale = clamp(this.gripCur[f.side] > 0.01 ? 0.35 + 0.65 * this.gripCur[f.side] : 1.0, 0.25, 1.15);
+      // Τα προφίλ περιέχουν ήδη τις ακριβείς ανατομικές γωνίες σε rad (χωρίς διπλή εξασθένηση!)
       if (f.thumb) {
-        const curl = prof[3] * (f.k === 1 ? 0.75 : 1.0) * scale;
-        const opp = f.k === 1 ? prof[4] * scale : 0;
+        const curl = prof[3] * (f.k === 1 ? 0.78 : 1.0);
+        const opp = f.k === 1 ? prof[4] : 0;
         f.bone.quaternion.copy(f.local).multiply(this._q1.setFromAxisAngle(f.ax, curl));
         if (opp) f.bone.quaternion.multiply(this._q2.setFromAxisAngle(f.oppAx, opp));
       } else {
-        const curl = prof[f.k - 1] * f.cascade * scale;
+        const curl = prof[f.k - 1] * f.cascade;
         f.bone.quaternion.copy(f.local).multiply(this._q1.setFromAxisAngle(f.ax, curl));
       }
     }
@@ -4811,7 +4860,8 @@ export class Equipment {
 
     if (o.mat) {
       o.mat.quaternion.copy(yawQ);
-      o.mat.position.set(0, 0, h.matZ || 0).applyQuaternion(yawQ).setY(0.004);
+      if (h.matRotY) o.mat.quaternion.multiply(_tmpQ2.setFromAxisAngle(_tmpU, h.matRotY));
+      o.mat.position.set(h.matX || 0, 0, h.matZ || 0).applyQuaternion(yawQ).setY(0.004);
     }
 
     if (o.bench) {

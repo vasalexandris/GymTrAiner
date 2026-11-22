@@ -15,14 +15,15 @@ const FINGER_CASCADE = { Index: 0.90, Middle: 1.00, Ring: 1.08, Pinky: 1.16 };
 
 // Προφίλ κάμψης δαχτύλων [k1 (MCP), k2 (PIP), k3 (DIP), thumbCurl, thumbOppose]
 const GRIP_PROFILES = {
-  open:       [0.06, 0.08, 0.05, 0.05, 0.00],
-  floor:      [-0.06, 0.03, 0.03, 0.02, -0.14], // παλάμες ανοιχτές & επίπεδες στο έδαφος
-  relaxed:    [0.24, 0.34, 0.22, 0.16, 0.12],
-  chair:      [0.64, 0.80, 0.48, 0.20, 0.10],   // δάχτυλα αγκαλιάζουν την άκρη της καρέκλας
-  bar:        [1.18, 1.48, 1.02, 0.62, 0.58],   // σφιχτή λαβή μπάρας με αντίχειρα από πάνω
-  dumbbell:   [1.15, 1.44, 0.98, 0.58, 0.52],
-  kettlebell: [1.05, 1.32, 0.88, 0.48, 0.44],
-  trx:        [1.12, 1.40, 0.95, 0.55, 0.50],
+  open:       [0.28, 0.36, 0.24, 0.22, 0.18], // φυσικό ανοιχτό χέρι με ήπια ανατομική καμπύλη (όχι άκαμπτο)
+  floor:      [-0.04, 0.05, 0.05, 0.06, -0.06], // παλάμες ανοιχτές & επίπεδες στο στρώμα/τοίχο
+  relaxed:    [0.56, 0.74, 0.52, 0.38, 0.36], // φυσική χαλαρή καμπύλωση δαχτύλων σε ηρεμία / ελεύθερο χέρι
+  fist:       [1.18, 1.50, 1.08, 0.68, 0.64], // απαλή αθλητική γροθιά (προβολές, ψηλά γόνατα, τρέξιμο)
+  chair:      [0.72, 0.90, 0.58, 0.26, 0.18], // δάχτυλα αγκαλιάζουν την άκρη της καρέκλας/πάγκου
+  bar:        [1.34, 1.56, 1.14, 0.74, 0.68], // σφιχτή λαβή μπάρας/μονόζυγου/λαβής λάστιχου
+  dumbbell:   [1.32, 1.54, 1.10, 0.72, 0.64],
+  kettlebell: [1.20, 1.46, 1.00, 0.60, 0.54],
+  trx:        [1.28, 1.52, 1.06, 0.66, 0.60],
 };
 
 /**
@@ -280,7 +281,8 @@ export class SkinnedCoach {
         if (!this.b[n]) continue;
         const invW = this.rest[n].world.clone().invert();
         const ax = new THREE.Vector3(0, 0, side === 'Left' ? -1 : 1).applyQuaternion(invW);
-        const oppAx = new THREE.Vector3(0, side === 'Left' ? -1 : 1, 0).applyQuaternion(invW);
+        // Άξονας αντίθεσης αντίχειρα (προς το εσωτερικό της παλάμης, όχι προς τα έξω!)
+        const oppAx = new THREE.Vector3(0, side === 'Left' ? 1 : -1, 0).applyQuaternion(invW);
         this.fingers.push({ bone: this.b[n], local: this.rest[n].local, ax, oppAx, side, k, thumb: true });
       }
     }
@@ -556,25 +558,27 @@ export class SkinnedCoach {
       }
     }
 
-    // 6. Ρεαλιστική άρθρωση δαχτύλων (8 προφίλ ανά εξοπλισμό / έδαφος)
-    const kf = 1 - Math.exp(-dt * 11);
+    // 6. Ρεαλιστική άρθρωση δαχτύλων ανά χέρι (υποστηρίζει ανεξάρτητο προφίλ Left/Right, π.χ. side plank, one-arm row)
+    const kf = 1 - Math.exp(-dt * 12);
     for (const s of ['Left', 'Right']) {
       this.gripCur[s] += (this.grip[s] - this.gripCur[s]) * kf;
-      const targetProf = GRIP_PROFILES[this.gripStyle[s]] || GRIP_PROFILES.relaxed;
+      const armOverride = ik?.arms?.[s]?.gripStyle;
+      const effStyle = (armOverride && GRIP_PROFILES[armOverride]) ? armOverride : this.gripStyle[s];
+      const targetProf = GRIP_PROFILES[effStyle] || GRIP_PROFILES.relaxed;
       const curProf = this.gripProfCur[s];
       for (let j = 0; j < 5; j++) curProf[j] += (targetProf[j] - curProf[j]) * kf;
     }
     for (let i = 0; i < this.fingers.length; i++) {
       const f = this.fingers[i];
       const prof = this.gripProfCur[f.side];
-      const scale = clamp(this.gripCur[f.side] > 0.01 ? 0.35 + 0.65 * this.gripCur[f.side] : 1.0, 0.25, 1.15);
+      // Τα προφίλ περιέχουν ήδη τις ακριβείς ανατομικές γωνίες σε rad (χωρίς διπλή εξασθένηση!)
       if (f.thumb) {
-        const curl = prof[3] * (f.k === 1 ? 0.75 : 1.0) * scale;
-        const opp = f.k === 1 ? prof[4] * scale : 0;
+        const curl = prof[3] * (f.k === 1 ? 0.78 : 1.0);
+        const opp = f.k === 1 ? prof[4] : 0;
         f.bone.quaternion.copy(f.local).multiply(this._q1.setFromAxisAngle(f.ax, curl));
         if (opp) f.bone.quaternion.multiply(this._q2.setFromAxisAngle(f.oppAx, opp));
       } else {
-        const curl = prof[f.k - 1] * f.cascade * scale;
+        const curl = prof[f.k - 1] * f.cascade;
         f.bone.quaternion.copy(f.local).multiply(this._q1.setFromAxisAngle(f.ax, curl));
       }
     }

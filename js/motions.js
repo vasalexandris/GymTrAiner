@@ -114,8 +114,8 @@ const lie = { rrx: -1.57, rY: 0.13, rZ: 0.06, ...legs(-0.84, 1.98, 0.05) };
 const crunchA = P({ ...lie, tx: 0.02, hd: 0.05, ...arms(-2.05, 0.72, -2.05) });
 const crunchB = P({ ...lie, tx: 0.76, hd: 0.28, ...arms(-1.95, 0.62, -2.05) });
 
-const bridgeA = P({ ...lie, ...arms(0.04, 0.18, -0.10) });
-const bridgeB = P({ ...lie, rrx: -1.96, rY: 0.37, rZ: 0.05, ...legs(-0.04, 1.70, 0.06), ...arms(0.42, 0.18, -0.10) });
+const bridgeA = P({ ...lie, rY: 0.125, rZ: 0.08, tx: 0.0, hd: 0.06, ...arms(0.04, 0.18, -0.08) });
+const bridgeB = P({ ...lie, rrx: -2.02, rY: 0.34, rZ: 0.04, tx: 0.04, hd: 0.44, ...legs(-0.06, 1.62, 0.06), ...arms(0.42, 0.18, -0.08) });
 
 const hipThrustA = P({ rrx: -1.06, rY: 0.22, rZ: 0.12, tx: 0.20, hd: 0.34, ...legs(-1.35, 1.88, 0.08), ...arms(-0.62, 0.18, -0.85) });
 const hipThrustB = P({ rrx: -1.56, rY: 0.44, rZ: 0.14, tx: 0.04, hd: 0.42, ...legs(-0.08, 1.56, 0.08), ...arms(-0.18, 0.18, -0.55) });
@@ -378,7 +378,7 @@ export const MOTIONS = {
       { t: 0.54, p: kneeB, ease: 'linear' },
       { t: 1.00, p: kneeA, ease: 'inOut' },
     ],
-    ik: { feet: 'free', hands: 'free', forearmTwist: 0, elbowFlare: 0.18, grip: 'relaxed', spine: 'neutral' },
+    ik: { feet: 'free', hands: 'free', forearmTwist: 0, elbowFlare: 0.18, grip: 'fist', spine: 'neutral' },
   },
   calf_raise: {
     label: 'Ανασηκώσεις γάμπας', tempo: 2.2, prof: [0.38, 0.22, 0.40], yaw: 0.78,
@@ -408,7 +408,7 @@ export const MOTIONS = {
     label: 'Γέφυρα γλουτών', tempo: 3.0, prof: [0.40, 0.20, 0.40], yaw: 1.25, floor: true,
     A: bridgeA, B: bridgeB,
     keys: phases(bridgeA, bridgeB, { toB: 0.40, hold: 0.20, easeDown: 'out', easeUp: 'inOut' }),
-    ik: { feet: 'bridge', stanceW: 0.28, toeOut: 0.12, hands: 'free', forearmTwist: -1.35, elbowFlare: 0.22, grip: 'open', spine: 'neutral' },
+    ik: { feet: 'bridge', stanceW: 0.28, toeOut: 0.12, hands: 'supine_mat', forearmTwist: -1.35, elbowFlare: 0.18, grip: 'floor', spine: 'neutral' },
   },
   incline_row: {
     label: 'Κωπηλατική με ιμάντες (TRX)', tempo: 3.0, prof: [0.40, 0.12, 0.48], yaw: 1.15, floor: true,
@@ -472,11 +472,11 @@ export const MOTIONS = {
     ik: { feet: 'free', hands: 'free', forearmTwist: -1.25, elbowFlare: 0.30, grip: 'open', spine: 'ext' },
   },
   side_plank: {
-    palm: 'flat', label: 'Πλάγια σανίδα', tempo: 3.0, yaw: 0.32, floor: true, hold: true, flatFeet: false,
+    palm: 'flat', label: 'Πλάγια σανίδα', tempo: 3.0, yaw: 0.25, floor: true, hold: true, flatFeet: false,
     frame: { h: 1.75, w: 2.35, cy: 0.46 },
     A: sidePlankP, B: sidePlankP,
     keys: [{ t: 0, p: sidePlankP }, { t: 1, p: sidePlankP }],
-    ik: { feet: 'side_plank', hands: 'side_plank', forearmTwist: -1.30, elbowFlare: 0.35, grip: 'floor', spine: 'neutral' },
+    ik: { feet: 'side_plank', hands: 'side_plank', forearmTwist: -1.30, elbowFlare: 0.35, grip: 'relaxed', spine: 'neutral' },
   },
   russian_twist: {
     label: 'Ρωσικές στροφές', tempo: 2.8, yaw: 0.55, floor: true,
@@ -660,11 +660,11 @@ export const MOTIONS = {
     ik: { feet: 'toe', stanceW: 0.24, hands: 'bench_push', handExtraW: 0.06, forearmTwist: -1.35, elbowFlare: 0.38, grip: 'chair', spine: 'neutral', prop: 'bench' },
   },
   knee_side_plank: {
-    palm: 'flat', label: 'Πλάγια σανίδα στα γόνατα', tempo: 3.0, yaw: 0.32, floor: true, hold: true, flatFeet: false,
+    palm: 'flat', label: 'Πλάγια σανίδα στα γόνατα', tempo: 3.0, yaw: 0.25, floor: true, hold: true, flatFeet: false,
     frame: { h: 1.70, w: 2.20, cy: 0.44 },
     A: kneeSidePlankP, B: kneeSidePlankP,
     keys: [{ t: 0, p: kneeSidePlankP }, { t: 1, p: kneeSidePlankP }],
-    ik: { feet: 'knee_side_plank', hands: 'side_plank', forearmTwist: -1.30, elbowFlare: 0.35, grip: 'floor', spine: 'neutral' },
+    ik: { feet: 'knee_side_plank', hands: 'side_plank', forearmTwist: -1.30, elbowFlare: 0.35, grip: 'relaxed', spine: 'neutral' },
   },
   plank_shoulder_tap: {
     palm: 'flat', label: 'Σανίδα με επαφή ώμων', tempo: 2.4, prof: [0.40, 0.16, 0.44], yaw: 0.92, floor: true, flatFeet: false, alt: true,
@@ -677,7 +677,7 @@ export const MOTIONS = {
     frame: { h: 1.85, w: 2.55, cy: 0.46 },
     A: legRaiseA, B: legRaiseB,
     keys: phases(legRaiseA, legRaiseB, { toB: 0.44, hold: 0.12, easeDown: 'out', easeUp: 'inOut' }),
-    ik: { feet: 'free', hands: 'free', forearmTwist: -1.35, elbowFlare: 0.18, grip: 'open', spine: 'flex' },
+    ik: { feet: 'free', hands: 'supine_mat', forearmTwist: -1.35, elbowFlare: 0.18, grip: 'floor', spine: 'flex' },
   },
   bicycle_crunch: {
     label: 'Ποδήλατο κοιλιακών', tempo: 2.0, prof: [0.44, 0.10, 0.46], yaw: 1.10, floor: true, flatFeet: false, alt: true,
