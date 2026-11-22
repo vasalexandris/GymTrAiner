@@ -25,6 +25,7 @@
   <textarea name="ex" placeholder="Κωπηλατική με λάστιχο σε όρθια θέση | λάστιχο&#10;Κάμψεις στα γόνατα | στρώμα"></textarea></div>
   <label>…ή κινήσεις (κλειδιά): <input name="m" size="40" placeholder="squat,pushup,plank"></label>
   <label>Εξοπλισμός (για κλειδιά): <input name="eq" size="18" placeholder="dumbbells,mat"></label>
+  <label>Κόμμωση <select name="hair"><option value="">προεπιλογή</option><option>original</option><option>ponytail</option><option>bun</option><option>braid</option><option>short</option></select></label>
   <label>Σελίδα <input name="page" type="number" min="1" value="1" style="width:60px"></label>
   <button>Εμφάνιση</button>
 </form>
@@ -35,7 +36,7 @@ import { MOTION_KEYS, inferMotion } from './js/motions.js';
 import { equipmentFor } from './js/equipment.js';
 
 const q = new URLSearchParams(location.search), f = document.getElementById('f');
-for (const k of ['ex', 'm', 'eq', 'page']) if (q.get(k)) f.elements[k].value = q.get(k);
+for (const k of ['ex', 'm', 'eq', 'page', 'hair']) if (q.get(k)) f.elements[k].value = q.get(k);
 const PER = 4; // 4 ασκήσεις × 2 θέσεις = 8 WebGL contexts (όριο browser ~16)
 
 let items;
@@ -60,7 +61,7 @@ for (const it of slice) for (const u of [0, 1]) {
   const lbl = document.createElement('div'); lbl.className = 'lbl';
   lbl.innerHTML = `<b>${it.m}</b> · θέση ${u} · εξοπλισμός: ${Object.keys(it.eq).join(', ') || '—'}<br>${it.title.replace(/</g, '&lt;')}`;
   cell.append(view, lbl); g.append(cell);
-  const a = new Avatar(view, 'real', { quality: 'normal' }); await a.loaded;
+  const a = new Avatar(view, 'real', { quality: 'normal', hair: q.get('hair') || undefined }); await a.loaded;
   a.paused = true; cancelAnimationFrame(a.raf); a.debug(it.m, u, false, it.eq);
 }
 window.done = true;

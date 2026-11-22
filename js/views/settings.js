@@ -75,7 +75,9 @@ function coachCard() {
       h('div', { class: 'field' }, h('label', {}, 'Ποιότητα γραφικών'), h('select', { onchange: e => { (state.settings.coach ||= {}).quality = e.target.value || undefined; save(); } },
         [['', 'Αυτόματη (υψηλή σε PC, κανονική σε κινητό)'], ['high', 'Υψηλή (σκιές επαφής/ambient occlusion)'], ['normal', 'Κανονική (πιο γρήγορη)']].map(([v, l]) => h('option', { value: v, selected: (state.settings.coach?.quality || '') === v }, l)))),
       h('div', { class: 'field' }, h('label', {}, 'Περιβάλλον'), h('select', { onchange: e => { (state.settings.coach ||= {}).env = e.target.value; save(); } },
-        [['studio', 'Φωτογραφικό στούντιο'], ['home', 'Σπίτι (ξύλινο πάτωμα)']].map(([v, l]) => h('option', { value: v, selected: (state.settings.coach?.env || 'studio') === v }, l))))),
+        [['studio', 'Φωτογραφικό στούντιο'], ['home', 'Σπίτι (ξύλινο πάτωμα)']].map(([v, l]) => h('option', { value: v, selected: (state.settings.coach?.env || 'studio') === v }, l)))),
+      h('div', { class: 'field' }, h('label', {}, 'Κόμμωση coach (ρεαλιστική)'), h('select', { onchange: e => { (state.settings.coach ||= {}).hair = e.target.value; save(); } },
+        [['original', 'Αρχική'], ['ponytail', 'Αλογοουρά'], ['bun', 'Κότσος'], ['braid', 'Πλεξούδα'], ['short', 'Κοντά']].map(([v, l]) => h('option', { value: v, selected: (state.settings.coach?.hair || 'original') === v }, l))))),
     h('div', { class: 'row' }, h('label', { class: 'btn', style: 'margin:0;cursor:pointer;font-weight:400' }, '⬆ Ανέβασμα .glb', h('span', { hidden: true }, input)),
       h('button', { class: 'danger', onclick: async () => { await deleteCustomModel(); const C = state.settings.coach; if (C?.look === 'custom') { C.look = 'real'; save(); } toast('Διαγράφηκε'); refresh(); } }, 'Διαγραφή μοντέλου')),
     info);

@@ -4,6 +4,7 @@
 import * as THREE from './vendor/three.module.min.js';
 import { GLTFLoader } from './vendor/jsm/loaders/GLTFLoader.js';
 import { basisFromDirSec, applyAxialTwist, solveTwoBoneIK, clamp } from './ik.js';
+import { HairController } from './hair.js';
 
 const norm = n => n.replace(/^mixamorig[:_]?/i, '');
 const V = () => new THREE.Vector3();
@@ -290,6 +291,9 @@ export class SkinnedCoach {
     this.gripProfCur = { Left: [...GRIP_PROFILES.relaxed], Right: [...GRIP_PROFILES.relaxed] };
     this.offY = 0;
 
+    // Διαχειριστής εναλλακτικής κόμμωσης (Michelle & συμβατά Mixamo μοντέλα)
+    this.hair = new HairController(root, this.b.Head, this.quality, opts.hair || 'original');
+
     // Προ-δεσμευμένα scratch αντικείμενα (zero GC ανά καρέ)
     this._q1 = new THREE.Quaternion();
     this._q2 = new THREE.Quaternion();
@@ -303,6 +307,22 @@ export class SkinnedCoach {
       p1: V(), p2: V(), poleNormal: V(), bendNormal: V(),
       clampedDist: 0, reachRatio: 0,
     };
+  }
+
+  setHair(style) {
+    this.hair?.setStyle(style);
+  }
+
+  updateHair(dt) {
+    this.hair?.update(dt);
+  }
+
+  resetHairPhysics() {
+    this.hair?.resetPhysics();
+  }
+
+  dispose() {
+    this.hair?.dispose();
   }
 
   setGrip(left, right, styleL = null, styleR = null) {
@@ -383,7 +403,7 @@ export class SkinnedCoach {
       let maxDrop = 0;
       for (const side of ['Left', 'Right']) {
         const legIK = ik.legs[side];
-        if (!legIK || !legIK.pin) continue;
+        if (!legIK || !legIK.pin || !legIK.target) continue;
         const hipPos = this.worldPos(side + 'UpLeg', this._v1);
         const L1 = side === 'Left' ? this.dims.lenUpLegL : this.dims.lenUpLegR;
         const L2 = side === 'Left' ? this.dims.lenLegL : this.dims.lenLegR;
@@ -416,7 +436,29 @@ export class SkinnedCoach {
     const pinnedBones = new Set();
     for (const side of ['Left', 'Right']) {
       const legIK = ik?.legs?.[side];
-      if (legIK && legIK.target) {
+      if (legIK && legIK.mode === 'knee_direct' && legIK.kneePos) {
+        if (legIK.pin) {
+          pinnedBones.add(side + 'Leg');
+          pinnedBones.add(side + 'Foot');
+          pinnedBones.add(side + 'ToeBase');
+        }
+        const hipPos = this.worldPos(side + 'UpLeg', this._v1);
+        const dir1 = this._v2.subVectors(legIK.kneePos, hipPos);
+        if (dir1.lengthSq() > 1e-6) {
+          this._setBoneWorld(side + 'UpLeg', dir1, legIK.kneeSec || Y);
+        }
+        const dir2 = this._v3.copy(legIK.ankleDir || Z);
+        if (dir2.lengthSq() > 1e-6) {
+          this._setBoneWorld(side + 'Leg', dir2, legIK.shinSec || legIK.kneeSec || Y);
+        }
+        if (this.limbMap[side + 'Foot']) {
+          const fDir = legIK.footDir ? this._v4.copy(legIK.footDir) : this._v4.copy(dir2);
+          this._setBoneWorld(side + 'Foot', fDir, legIK.footUp || Y);
+          if (this.limbMap[side + 'ToeBase']) {
+            this._setBoneWorld(side + 'ToeBase', fDir, legIK.footUp || Y);
+          }
+        }
+      } else if (legIK && legIK.target) {
         if (legIK.pin) {
           pinnedBones.add(side + 'Foot');
           pinnedBones.add(side + 'ToeBase');
@@ -560,7 +602,10 @@ export class SkinnedCoach {
       if (y < minY) minY = y;
     }
 
-    if (groundLock === 'ik') {
+    if (groundLock === 'air') {
+      // Αιώρηση / μονόζυγο / φάση πτήσης άλματος: καμία έλξη προς το έδαφος
+      this.offY += (0 - this.offY) * (1 - Math.exp(-dt * 18));
+    } else if (groundLock === 'ik') {
       const want = Number.isFinite(minY) ? Math.max(0, this.offY - minY) : 0;
       this.offY += (want - this.offY) * (1 - Math.exp(-dt * 14));
     } else if (Number.isFinite(minY)) {
@@ -568,6 +613,8 @@ export class SkinnedCoach {
       this.offY += (want - this.offY) * (1 - Math.exp(-dt * 18));
     }
 
+    this.hair?.update(dt);
     return resolvedMeta;
   }
 }
+

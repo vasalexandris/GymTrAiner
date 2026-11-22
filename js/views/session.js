@@ -64,7 +64,7 @@ export function sessionView(root) {
     try {
       if (!webglAvailable()) throw new Error('no webgl');
       const look = C.look === 'custom' && !customModel ? 'real' : C.look;
-      avatar = new Avatar(canvasBox, look, { customModel: customModel?.buf, onError: onModelError, quality: C.quality, env: C.env || 'studio' });
+      avatar = new Avatar(canvasBox, look, { customModel: customModel?.buf, onError: onModelError, quality: C.quality, env: C.env || 'studio', hair: C.hair || undefined });
       avatar.pause(paused); prepare();
     } catch (e) {
       console.warn('3D μη διαθέσιμο', e);
@@ -129,6 +129,8 @@ export function sessionView(root) {
       C.view === '3d' && h('select', { style: 'width:auto', title: 'Εμφάνιση coach', onchange: e => {
         C.look = e.target.value; C.view = '3d'; save(); makeAvatar(); drawControls();
       } }, Object.keys(LOOKS).filter(k => k !== 'custom' || customModel).map(k => h('option', { value: k, selected: k === C.look }, LOOK_LABEL[k]))),
+      C.view === '3d' && (C.look === 'real' || !C.look) && h('select', { style: 'width:auto', title: 'Κόμμωση', onchange: e => { C.hair = e.target.value; save(); avatar?.setHair(C.hair); } },
+        [['original', '💇 Κόμμωση: αρχική'], ['ponytail', '💇 Αλογοουρά'], ['bun', '💇 Κότσος'], ['braid', '💇 Πλεξούδα'], ['short', '💇 Κοντά']].map(([v, l]) => h('option', { value: v, selected: (C.hair || 'original') === v }, l))),
       btn('⛶', toggleFull),
       h('select', { style: 'width:auto', title: 'Προβολή', onchange: e => { C.view = e.target.value; save(); makeAvatar(); drawControls(); } },
         [['video', '🎬 Βίντεο (πραγματικός άνθρωπος)'], ['3d', '🧍 3D coach']].map(([v, l]) => h('option', { value: v, selected: v === C.view }, l))),

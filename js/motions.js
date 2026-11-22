@@ -56,7 +56,7 @@ function phases(A, B, { brace, settle, toB = 0.46, hold = 0.10, easeDown = 'inOu
   return k;
 }
 
-// ---- ΒΑΣΙΚΕΣ ΠΟΖΕΣ ----
+// ---- ΒΑΣΙΚΕΣ ΠΟΖΕΣ (ΑΡΧΙΚΕΣ 34 ΑΣΚΗΣΕΙΣ) ----
 const squatA = P({ tx: 0.04, ...arms(-0.18, 0.08, -0.18), ...legs(-0.06, 0.10, 0.05, 0.18) });
 const squatBrace = P({ tx: 0.14, ...arms(-0.48, 0.06, -0.22), ...legs(-0.26, 0.30, 0.07, 0.20) });
 const squatB = P({ tx: 0.48, ...arms(-1.60, 0.06, -0.14), ...legs(-1.42, 1.88, 0.14, 0.22) });
@@ -174,6 +174,134 @@ const kneeB = P({ tx: 0.06, ty: 0.16, lift: 0.045, slx: 0.42, srx: -1.02, slz: -
 
 const calfA = P({ tx: 0.02, ...arms(-0.08, 0.08, -0.14), ...legs(-0.03, 0.05, 0.03) });
 const calfB = P({ tx: 0.02, lift: 0.095, ...arms(-0.08, 0.08, -0.14), ...legs(-0.02, 0.04, 0.03), anL: 0.85, anR: 0.85 });
+
+// ---- ΝΕΕΣ ΠΟΖΕΣ ΓΙΑ TASK B (ΣΥΣΤΗΜΑ ΑΓΚΥΡΩΣΗΣ ΛΑΣΤΙΧΩΝ) ----
+// 1. Όρθια κωπηλατική με λάστιχο (άγκυρα μπροστά στο στήθος, όρθιος κορμός, έλξη οριζόντια πίσω από τον κορμό)
+const standRowA = P({ tx: 0.04, ...arms(-1.48, 0.08, -0.12), ...legs(-0.14, 0.22, 0.05, 0.12) });
+const standRowB = P({ tx: -0.03, shL: -0.015, shR: -0.015, ...arms(0.46, 0.16, -1.68), ...legs(-0.14, 0.22, 0.05, 0.12) });
+
+// 2. Face pull (άγκυρα μπροστά-ψηλά, αγκώνες ψηλά & ανοιχτοί, εξωτερική στροφή ώμων προς το πρόσωπο)
+const facePullA = P({ tx: 0.03, ...arms(-1.82, 0.10, -0.10), ...legs(-0.14, 0.22, 0.06, 0.12) });
+const facePullB = P({ tx: -0.04, shL: 0.01, shR: 0.01, ...arms(-1.18, 1.38, -1.92), ...legs(-0.14, 0.22, 0.06, 0.12) });
+
+// 3. Lat pulldown με λάστιχο (άγκυρα ψηλά-μπροστά, χέρια ψηλά → έλξη αγκώνων κάτω στα πλευρά)
+const latPullA = P({ tx: 0.10, hd: -0.12, ...arms(-2.78, 0.28, -0.14), ...legs(-0.22, 0.36, 0.07, 0.14) });
+const latPullB = P({ tx: 0.04, hd: 0.0, shL: -0.02, shR: -0.02, ...arms(-0.32, 0.42, -2.02), ...legs(-0.22, 0.36, 0.07, 0.14) });
+
+// 4. Όρθιες πιέσεις στήθους με λάστιχο (άγκυρα πίσω στο στήθος, σταθερή στάση, ώθηση μπροστά)
+const bandPressA = P({ tx: 0.07, ...arms(-0.18, 0.56, -1.78), ...legs(-0.14, 0.22, 0.05, 0.12) });
+const bandPressB = P({ tx: 0.09, ...arms(-1.52, 0.10, -0.12), ...legs(-0.14, 0.22, 0.05, 0.12) });
+
+// 5. Pallof press (άγκυρα πλάγια στο ύψος μέσης/στέρνου, αυστηρή αντι-στροφή κορμού, ώθηση ευθεία μπροστά)
+const pallofA = P({ tx: 0.04, ty: 0.0, ...arms(-0.58, -0.18, -1.88), ...legs(-0.20, 0.32, 0.08, 0.14) });
+const pallofB = P({ tx: 0.04, ty: 0.0, ...arms(-1.46, -0.14, -0.12), ...legs(-0.20, 0.32, 0.08, 0.14) });
+
+// 6. Woodchop (διαγώνια στροφή από ψηλά αριστερά → χαμηλά δεξιά με στροφή κορμού & ισχίων)
+const woodchopA = P({ tx: 0.02, ty: 0.68, tz: -0.06, hdY: 0.38, ...arms(-2.22, 0.10, -0.18), ...legs(-0.12, 0.18, 0.10, 0.16) });
+const woodchopMid = P({ tx: 0.16, ty: 0.0, tz: 0.0, ...arms(-1.35, -0.12, -0.22), ...legs(-0.34, 0.50, 0.11, 0.16) });
+const woodchopB = P({ tx: 0.34, ty: -0.72, tz: 0.08, hdY: -0.40, ...arms(-0.72, -0.10, -0.20), ...legs(-0.56, 0.80, 0.12, 0.16) });
+
+// ---- ΝΕΕΣ ΠΟΖΕΣ ΓΙΑ TASK C (25 ΠΑΡΑΛΛΑΓΕΣ ΑΣΚΗΣΕΩΝ) ----
+// 7. Κάμψεις στα γόνατα (γόνατα στο στρώμα, κνήμες σηκωμένες ψηλά, ευθεία ώμοι→ισχία→γόνατα)
+const kneePushTop = P({ rrx: 1.06, rY: 0.34, rZ: 0.04, tx: 0.02, hd: -0.30, ...arms(-1.06, 0.12, -0.08), ...legs(0.02, 1.48, 0.04) });
+const kneePushBot = P({ rrx: 1.42, rY: 0.17, rZ: 0.06, tx: 0.02, hd: -0.28, ...arms(-0.34, 0.42, -1.58), ...legs(0.02, 1.56, 0.04) });
+
+// 8. Κάμψεις σε τοίχο (όρθιος, παλάμες σε τοίχο μπροστά, ευθύ κεκλιμένο σώμα, ΧΩΡΙΣ στρώμα!)
+const wallPushA = P({ rrx: 0.34, tx: 0.02, hd: -0.12, ...arms(-1.55, 0.12, -0.10), ...legs(0.02, 0.04, 0.04) });
+const wallPushB = P({ rrx: 0.58, tx: 0.02, hd: -0.14, ...arms(-0.68, 0.42, -1.62), ...legs(0.02, 0.04, 0.04) });
+
+// 9. Incline push-up σε καρέκλα/πάγκο (παλάμες στο χείλος πάγκου μπροστά, ευθύ κεκλιμένο σώμα)
+const incPushA = P({ rrx: 0.86, rY: 0.58, rZ: -0.12, tx: 0.02, hd: -0.24, ...arms(-1.18, 0.12, -0.10), ...legs(0.02, 0.05, 0.04) });
+const incPushB = P({ rrx: 1.12, rY: 0.42, rZ: -0.06, tx: 0.02, hd: -0.24, ...arms(-0.36, 0.44, -1.58), ...legs(0.02, 0.05, 0.04) });
+
+// 10. Πλάγια σανίδα στα γόνατα (κάτω αγκώνας & γόνατα στο στρώμα, κνήμες λυγισμένες πίσω)
+const kneeSidePlankP = P({ rrx: 0.04, rrz: 1.22, rY: 0.34, rZ: 0.0, tx: 0.02, tz: -0.04, hdZ: -0.15, slx: -0.08, slz: -1.22, elL: -1.52, srx: 0.0, srz: 1.56, elR: -0.08, ...legs(0.02, 1.52, 0.03) });
+
+// 11. Σανίδα με επαφή ώμων (σταθερά ισχία, εναλλάξ το ένα χέρι αγγίζει τον απέναντι ώμο)
+const tapA = P({ rrx: 1.26, rY: 0.34, rZ: 0.02, tx: 0.02, hd: -0.34, ...arms(-1.26, 0.10, -0.08), ...legs(0.02, 0.05, 0.08) });
+const tapB = P({ rrx: 1.26, rY: 0.34, rZ: 0.02, tx: 0.02, ty: 0.04, hd: -0.32, slx: -1.26, slz: -0.10, elL: -0.08, srx: -0.68, srz: -0.45, elR: -2.18, ...legs(0.02, 0.05, 0.08) });
+
+// 12. Ανυψώσεις ποδιών (ύπτια στο στρώμα, μέση κολλημένη στο έδαφος, τεντωμένα πόδια από χαμηλά → 90°)
+const legRaiseA = P({ rrx: -1.57, rY: 0.13, rZ: 0.02, tx: 0.05, hd: 0.08, ...arms(0.06, 0.16, -0.08), ...legs(-0.24, 0.08, 0.03) });
+const legRaiseB = P({ rrx: -1.57, rY: 0.13, rZ: 0.02, tx: 0.08, hd: 0.12, ...arms(0.06, 0.16, -0.08), ...legs(-1.54, 0.08, 0.03) });
+
+// 13. Ποδήλατο κοιλιακών (ύπτια, εναλλάξ στροφή αγκώνα προς αντίθετο γόνατο με έκταση του άλλου ποδιού)
+const bikeA = P({ rrx: -1.57, rY: 0.13, rZ: 0.02, tx: 0.42, ty: 0.0, hd: 0.24, ...arms(-2.02, 0.72, -2.08), ...legs(-1.12, 1.32, 0.04) });
+const bikeB = P({ rrx: -1.57, rY: 0.13, rZ: 0.02, tx: 0.68, ty: 0.62, hd: 0.28, hdY: 0.28, slx: -1.85, srx: -2.02, slz: -0.68, srz: 0.56, elL: -2.08, elR: -2.08, hlx: -0.26, knL: 0.10, hrx: -1.78, knR: 1.72, hlz: -0.04, hrz: 0.04 });
+
+// 14. Γάτα-Αγελάδα (τετραποδική στάση στο στρώμα: έκταση σπονδυλικής ↔ κάμψη/καμπούριασμα)
+const catCowA = P({ rrx: 1.44, rY: 0.46, rZ: 0.0, tx: -0.44, hd: -0.42, ...arms(-1.40, 0.06, -0.08), ...legs(-1.44, 1.56, 0.04) }); // Αγελάδα (έκταση)
+const catCowB = P({ rrx: 1.34, rY: 0.47, rZ: 0.0, tx: 0.64, hd: 0.44, ...arms(-1.40, 0.06, -0.08), ...legs(-1.34, 1.56, 0.04) });  // Γάτα (κάμψη)
+
+// 15. Διάταση παιδιού (γονατιστός στο στρώμα, ισχία στις φτέρνες, κορμός διπλωμένος μπροστά, χέρια τεντωμένα μπροστά)
+const childPoseP = P({ rrx: 1.38, rY: 0.23, rZ: -0.26, tx: 0.36, hd: 0.28, ...arms(-2.96, 0.14, -0.08), ...legs(-2.12, 2.38, 0.10) });
+
+// 16. Καθίσματα σε καρέκλα (Box squat — κάθισμα μέχρι επαφή με τον πάγκο/καρέκλα πίσω)
+const boxSquatA = P({ tx: 0.04, rZ: 0.04, ...arms(-0.18, 0.08, -0.18), ...legs(-0.06, 0.10, 0.06, 0.18) });
+const boxSquatB = P({ tx: 0.36, rZ: -0.22, ...arms(-1.48, 0.08, -0.16), ...legs(-1.46, 1.56, 0.12, 0.20) });
+
+// 17. Bulgarian split squat (πίσω πέλμα υπερυψωμένο στον πάγκο πίσω, βαθύ μονοποδικό κάθισμα)
+const bssA = P({ tx: 0.06, rZ: 0.16, hlx: -0.12, knL: 0.16, hrx: 0.22, knR: 0.88, ...arms(-0.16, 0.09, -0.22), hlz: -0.05, hrz: 0.05 });
+const bssB = P({ tx: 0.16, rZ: 0.08, hlx: -1.48, knL: 1.62, hrx: 0.28, knR: 1.68, ...arms(-0.24, 0.10, -0.28), hlz: -0.05, hrz: 0.05 });
+
+// 18. Πλάγιες εκπτώσεις (Side lunge — πλάγιο βήμα, λυγισμένο εξωτερικό γόνατο, τεντωμένο το άλλο πόδι)
+const sideLungeA = P({ tx: 0.03, rX: 0.0, ...arms(-0.18, 0.09, -0.24), ...legs(-0.04, 0.08, 0.05, 0.10) });
+const sideLungeStep = P({ tx: 0.16, rX: 0.16, hlx: -0.45, knL: 0.56, hlz: -0.24, hrx: -0.18, knR: 0.10, hrz: 0.34, ...arms(-0.78, 0.08, -0.42) });
+const sideLungeB = P({ tx: 0.34, rX: 0.30, hlx: -1.32, knL: 1.54, hlz: -0.28, hrx: -0.34, knR: 0.06, hrz: 0.64, ...arms(-1.35, 0.06, -0.22) });
+
+// 19. Καθιστές πιέσεις ώμων (καθιστός σε καρέκλα/πάγκο, πίεση αλτήρων πάνω από το κεφάλι)
+const seatOhpA = P({ tx: 0.02, rZ: -0.04, ...arms(-0.55, 0.38, -2.02), ...legs(-1.54, 1.56, 0.08, 0.10) });
+const seatOhpB = P({ tx: 0.01, rZ: -0.04, shL: 0.045, shR: 0.045, ...arms(-2.96, 0.14, -0.08), ...legs(-1.54, 1.56, 0.08, 0.10) });
+
+// 20. Πιέσεις στήθους σε πάγκο (Bench press — ύπτια σε οριζόντιο πάγκο, πέλματα στο πάτωμα)
+const benchPressA = P({ rrx: -1.57, rY: 0.54, rZ: 0.0, tx: -0.04, hd: 0.04, ...arms(-0.78, 0.92, -1.68), ...legs(-0.72, 1.52, 0.10, 0.12) });
+const benchPressB = P({ rrx: -1.57, rY: 0.54, rZ: 0.0, tx: -0.02, hd: 0.04, ...arms(-1.57, 0.14, -0.10), ...legs(-0.72, 1.52, 0.10, 0.12) });
+
+// 21. Εκτάσεις τρικεφάλων (Tricep kickbacks — σκυφτός κορμός, βραχίονες παράλληλοι με κορμό, έκταση πήχεων πίσω)
+const kickbackA = P({ rrx: 0.82, tx: 0.14, hd: -0.26, ...arms(0.16, 0.08, -1.68), ...legs(-1.26, 0.52, 0.05) });
+const kickbackB = P({ rrx: 0.82, tx: 0.14, hd: -0.26, ...arms(0.24, 0.08, -0.08), ...legs(-1.26, 0.52, 0.05) });
+
+// 22. Υπερέκταση τρικεφάλων (Overhead tricep extension — αγκώνες ψηλά δίπλα στο κεφάλι, έκταση πάνω)
+const triExtA = P({ tx: 0.02, ...arms(-2.96, 0.12, -2.28), ...legs(-0.04, 0.08, 0.05, 0.10) });
+const triExtB = P({ tx: 0.02, ...arms(-2.98, 0.10, -0.08), ...legs(-0.04, 0.08, 0.05, 0.10) });
+
+// 23. Έλξεις σε μονόζυγο (Pull-up — κρέμασμα από μονόζυγο πόρτας, έλξη πηγουνιού πάνω από τη μπάρα)
+const pullUpA = P({ rrx: 0.02, rY: 1.06, tx: -0.04, hd: -0.12, shL: 0.05, shR: 0.05, ...arms(-3.04, 0.24, -0.08), ...legs(-0.08, 0.82, 0.04) });
+const pullUpB = P({ rrx: 0.04, rY: 1.48, tx: -0.08, hd: -0.14, shL: -0.02, shR: -0.02, ...arms(-0.62, 0.68, -2.18), ...legs(-0.14, 0.96, 0.04) });
+
+// 24. Κωπηλατική με έναν αλτήρα σε πάγκο (One-arm dumbbell row — αριστερό χέρι & γόνατο στον πάγκο, δεξί χέρι κωπηλατεί)
+const oneArmRowA = P({ rrx: 1.18, rY: 0.68, rX: 0.04, tx: 0.08, hd: -0.28, slx: -1.16, slz: -0.08, elL: -0.08, srx: -1.18, srz: 0.10, elR: -0.08, hlx: -1.18, knL: 1.45, hrx: -1.22, knR: 0.36 });
+const oneArmRowB = P({ rrx: 1.16, rY: 0.68, rX: 0.04, tx: 0.06, ty: -0.12, hd: -0.26, slx: -1.16, slz: -0.08, elL: -0.08, srx: 0.26, srz: 0.14, elR: -1.62, hlx: -1.18, knL: 1.45, hrx: -1.22, knR: 0.36 });
+
+// 25. Άλματα από κάθισμα (Squat jump — φόρτιση καθίσματος → εκρηκτική πτήση στον αέρα → μαλακή προσγείωση)
+const sqJumpLoad = P({ tx: 0.46, ...arms(0.42, 0.10, -0.35), ...legs(-1.38, 1.84, 0.12, 0.20) });
+const sqJumpAir = P({ tx: -0.04, lift: 0.30, ...arms(-2.65, 0.16, -0.14), ...legs(0.06, 0.06, 0.06, 0.12), anL: 0.65, anR: 0.65 });
+const sqJumpLand = P({ tx: 0.28, ...arms(-0.62, 0.10, -0.45), ...legs(-0.84, 1.18, 0.10, 0.18) });
+
+// 26. Άλματα πατινάζ (Skater jump — πλάγιο άλμα με φάση πτήσης & προσγείωση σε ένα πόδι)
+const skaterA = P({ tx: 0.36, ty: -0.22, rX: -0.26, hlx: -0.28, knL: 0.88, hlz: 0.24, hrx: -1.18, knR: 1.38, hrz: 0.12, slx: -1.08, srx: 0.46, slz: 0.28, srz: 0.16, elL: -0.78, elR: -0.88 });
+const skaterAir = P({ tx: 0.14, ty: 0.08, rX: 0.08, lift: 0.22, hlx: -0.58, knL: 0.72, hlz: -0.22, hrx: 0.24, knR: 0.56, hrz: 0.22, slx: 0.28, srx: -1.18, slz: -0.24, srz: 0.22, elL: -0.76, elR: -0.92, anL: 0.55, anR: 0.55 });
+const skaterLand = P({ tx: 0.36, ty: 0.22, rX: 0.26, hlx: -1.18, knL: 1.38, hlz: -0.12, hrx: -0.28, knR: 0.88, hrz: -0.24, slx: 0.46, srx: -1.08, slz: -0.16, srz: -0.28, elL: -0.88, elR: -0.78 });
+
+// 27. Ανυψώσεις γάμπας σε σκαλί (φτέρνες κάτω από το επίπεδο του σκαλιού στη φάση 0 → ψηλά στις μύτες στη φάση 1)
+const stepCalfA = P({ tx: 0.03, rY: 0.34, rZ: 0.20, ...arms(-0.10, 0.09, -0.18), ...legs(-0.04, 0.06, 0.04), anL: -0.36, anR: -0.36 });
+const stepCalfB = P({ tx: 0.02, rY: 0.34, rZ: 0.20, lift: 0.105, ...arms(-0.10, 0.09, -0.18), ...legs(-0.02, 0.04, 0.04), anL: 0.78, anR: 0.78 });
+
+// 28. Περπάτημα επί τόπου (ελεγχόμενο όρθιο βάδισμα επί τόπου, εναλλάξ γόνατο ~75° & αντίθετη κίνηση χεριών)
+const marchA = P({ tx: 0.03, ...arms(-0.16, 0.08, -0.72), ...legs(-0.04, 0.08, 0.04) });
+const marchB = P({ tx: 0.04, ty: 0.10, slx: 0.32, srx: -0.72, slz: -0.08, srz: 0.08, elL: -0.92, elR: -1.24, hlx: -1.12, knL: 1.32, hrx: 0.04, knR: 0.08 });
+
+// 29. Σχοινάκι (μικρά ρυθμικά άλματα με περιστροφή καρπών στα πλευρά και σχοινάκι)
+const ropeA = P({ tx: 0.04, lift: 0.0, ...arms(0.08, 0.22, -1.35), ...legs(-0.22, 0.34, 0.04) });
+const ropeB = P({ tx: 0.02, lift: 0.14, ...arms(0.04, 0.26, -1.25), ...legs(0.02, 0.08, 0.04), anL: 0.52, anR: 0.52 });
+
+// 30. Βάδισμα αγρότη (Farmer walk — όρθια στιβαρή στάση, βαρείς αλτήρες στα πλάγια, σταθερό βάδισμα επί τόπου)
+const farmerA = P({ tx: 0.02, shL: -0.02, shR: -0.02, ...arms(0.0, 0.13, -0.12), ...legs(-0.04, 0.08, 0.05) });
+const farmerB = P({ tx: 0.03, ty: 0.05, shL: -0.02, shR: -0.02, ...arms(0.0, 0.14, -0.12), hlx: -0.72, knL: 0.94, hrx: 0.06, knR: 0.08, hlz: -0.05, hrz: 0.05 });
+
+// 31. TRX Y-raise (κλίση πίσω, τεντωμένα χέρια ανεβαίνουν σε σχήμα Υ πάνω από το κεφάλι)
+const trxYA = P({ rrx: -0.44, rY: 0.84, rZ: -0.14, tx: 0.02, ...arms(-1.45, 0.08, -0.10), ...legs(0.02, 0.05, 0.05) });
+const trxYB = P({ rrx: -0.16, rY: 0.93, rZ: 0.02, tx: -0.02, shL: 0.02, shR: 0.02, ...arms(-2.68, 0.62, -0.10), ...legs(0.02, 0.05, 0.05) });
 
 export const MOTIONS = {
   // ---- ΑΡΧΙΚΕΣ 17 ΑΣΚΗΣΕΙΣ (ΔΙΑΤΗΡΟΥΝΤΑΙ ΟΛΑ ΤΑ ΚΛΕΙΔΙΑ) ----
@@ -302,7 +430,7 @@ export const MOTIONS = {
     ik: { feet: 'free', hands: 'free', forearmTwist: 0, elbowFlare: 0.22, grip: 'relaxed', spine: 'neutral' },
   },
 
-  // ---- ΝΕΕΣ 17 ΑΣΚΗΣΕΙΣ ΜΕ ΑΚΡΙΒΗ ΒΙΟΜΗΧΑΝΙΚΗ ΤΕΧΝΙΚΗ ----
+  // ---- ΓΥΡΟΣ 2: 17 ΑΣΚΗΣΕΙΣ ----
   mountain_climber: {
     palm: 'flat', label: 'Ορειβάτης (Mountain climber)', tempo: 1.35, yaw: 1.25, floor: true, flatFeet: false, alt: true,
     A: climbA, B: climbB,
@@ -442,7 +570,7 @@ export const MOTIONS = {
     label: 'Διάνοιξη λάστιχου', tempo: 2.8, prof: [0.42, 0.14, 0.44], yaw: 0.22,
     A: bandA, B: bandB,
     keys: phases(bandA, bandB, { toB: 0.42, hold: 0.14, easeDown: 'out', easeUp: 'inOut' }),
-    ik: { feet: 'planted', stanceW: 0.26, toeOut: 0.10, hands: 'band_pull', forearmTwist: -1.25, elbowFlare: 0.45, grip: 'bar', spine: 'neutral' },
+    ik: { feet: 'planted', stanceW: 0.26, toeOut: 0.10, hands: 'band_pull', bandAnchor: 'hands', forearmTwist: -1.25, elbowFlare: 0.45, grip: 'bar', spine: 'neutral' },
   },
   trx_squat: {
     label: 'Καθίσματα με TRX', tempo: 3.2, prof: [0.46, 0.10, 0.44], yaw: 1.05,
@@ -457,6 +585,261 @@ export const MOTIONS = {
     A: trxPressA, B: trxPressB,
     keys: phases(trxPressA, trxPressB, { toB: 0.46, hold: 0.08, easeDown: 'inOut', easeUp: 'out' }),
     ik: { feet: 'toe', stanceW: 0.26, footZ: -0.56, hands: 'trx_push', handExtraW: 0.12, forearmTwist: -1.35, elbowFlare: 0.48, grip: 'trx', spine: 'neutral' },
+  },
+
+  // ---- ΓΥΡΟΣ 3 (TASK B): ΑΓΚΥΡΩΜΕΝΕΣ ΑΣΚΗΣΕΙΣ ΛΑΣΤΙΧΟΥ ----
+  standing_row: {
+    label: 'Όρθια κωπηλατική με λάστιχο', tempo: 3.0, prof: [0.40, 0.14, 0.46], yaw: 1.02,
+    frame: { h: 2.35, w: 2.65, cy: 0.92 },
+    A: standRowA, B: standRowB,
+    keys: phases(standRowA, standRowB, { toB: 0.40, hold: 0.14, easeDown: 'out', easeUp: 'inOut' }),
+    ik: { feet: 'planted', stanceW: 0.30, toeOut: 0.12, hands: 'standing_row', bandAnchor: 'front_chest', forearmTwist: 0, elbowFlare: 0.14, grip: 'bar', spine: 'neutral' },
+  },
+  face_pull: {
+    label: 'Έλξη προσώπου (Face pull)', tempo: 3.0, prof: [0.40, 0.16, 0.44], yaw: 0.92,
+    frame: { h: 2.40, w: 2.65, cy: 0.98 },
+    A: facePullA, B: facePullB,
+    keys: phases(facePullA, facePullB, { toB: 0.40, hold: 0.16, easeDown: 'out', easeUp: 'inOut' }),
+    ik: { feet: 'planted', stanceW: 0.30, toeOut: 0.12, hands: 'face_pull', bandAnchor: 'front_high', forearmTwist: 0.35, elbowFlare: 0.85, grip: 'bar', spine: 'neutral' },
+  },
+  lat_pulldown: {
+    label: 'Έλξεις πλάτης με λάστιχο (Lat pulldown)', tempo: 3.0, prof: [0.42, 0.14, 0.44], yaw: 0.92,
+    frame: { h: 2.65, w: 2.40, cy: 1.12 },
+    A: latPullA, B: latPullB,
+    keys: phases(latPullA, latPullB, { toB: 0.42, hold: 0.14, easeDown: 'out', easeUp: 'inOut' }),
+    ik: { feet: 'planted', stanceW: 0.32, toeOut: 0.14, hands: 'lat_pulldown', bandAnchor: 'front_high', forearmTwist: -1.15, elbowFlare: 0.45, grip: 'bar', spine: 'neutral' },
+  },
+  band_chest_press: {
+    label: 'Όρθιες πιέσεις στήθους με λάστιχο', tempo: 3.0, prof: [0.42, 0.12, 0.46], yaw: 1.05,
+    frame: { h: 2.35, w: 2.65, cy: 0.92 },
+    A: bandPressA, B: bandPressB,
+    keys: phases(bandPressA, bandPressB, { toB: 0.42, hold: 0.12, easeDown: 'out', easeUp: 'inOut' }),
+    ik: { feet: 'planted', stanceW: 0.30, toeOut: 0.12, hands: 'band_chest_press', bandAnchor: 'behind_chest', forearmTwist: -1.30, elbowFlare: 0.42, grip: 'bar', spine: 'neutral' },
+  },
+  pallof_press: {
+    label: 'Πίεση Pallof (αντι-στροφή)', tempo: 3.2, prof: [0.38, 0.24, 0.38], yaw: 0.45,
+    frame: { h: 2.35, w: 2.70, cy: 0.92 },
+    A: pallofA, B: pallofB,
+    keys: phases(pallofA, pallofB, { toB: 0.38, hold: 0.24, easeDown: 'out', easeUp: 'inOut' }),
+    ik: { feet: 'planted', stanceW: 0.34, toeOut: 0.12, hands: 'pallof_press', bandAnchor: 'side_waist', forearmTwist: 0, elbowFlare: 0.20, grip: 'bar', spine: 'neutral' },
+  },
+  woodchop: {
+    label: 'Διαγώνια στροφή κορμού (Woodchop)', tempo: 3.0, prof: [0.44, 0.12, 0.44], yaw: 0.36,
+    frame: { h: 2.50, w: 2.75, cy: 0.98 },
+    A: woodchopA, B: woodchopB,
+    keys: [
+      { t: 0.00, p: woodchopA },
+      { t: 0.22, p: woodchopMid, ease: 'out' },
+      { t: 0.44, p: woodchopB, ease: 'out' },
+      { t: 0.56, p: woodchopB, ease: 'linear' },
+      { t: 0.78, p: woodchopMid, ease: 'inOut' },
+      { t: 1.00, p: woodchopA, ease: 'cubic' },
+    ],
+    ik: { feet: 'planted', stanceW: 0.42, toeOut: 0.16, hands: 'woodchop', bandAnchor: 'side_high', forearmTwist: 0, elbowFlare: 0.28, grip: 'bar', spine: 'twist' },
+  },
+
+  // ---- ΓΥΡΟΣ 3 (TASK C): 25 ΕΞΕΙΔΙΚΕΥΜΕΝΕΣ ΠΑΡΑΛΛΑΓΕΣ ΑΣΚΗΣΕΩΝ ----
+  knee_pushup: {
+    palm: 'flat', label: 'Κάμψεις στα γόνατα', tempo: 3.0, prof: [0.46, 0.08, 0.46], yaw: 1.25, floor: true, flatFeet: false,
+    A: kneePushTop, B: kneePushBot,
+    keys: phases(kneePushTop, kneePushBot, { toB: 0.46, hold: 0.08, easeDown: 'inOut', easeUp: 'out' }),
+    ik: { feet: 'knee_pushup', stanceW: 0.22, hands: 'knee_floor', handExtraW: 0.10, forearmTwist: -1.35, elbowFlare: 0.40, grip: 'floor', spine: 'neutral' },
+  },
+  wall_pushup: {
+    palm: 'flat', label: 'Κάμψεις σε τοίχο', tempo: 2.8, prof: [0.46, 0.08, 0.46], yaw: 1.48, noZ: true,
+    frame: { h: 2.35, w: 2.35, cy: 0.92 },
+    A: wallPushA, B: wallPushB,
+    keys: phases(wallPushA, wallPushB, { toB: 0.46, hold: 0.08, easeDown: 'inOut', easeUp: 'out' }),
+    ik: { feet: 'planted', stanceW: 0.26, footZ: -0.46, toeOut: 0.06, hands: 'wall_push', handExtraW: 0.08, forearmTwist: -1.35, elbowFlare: 0.38, grip: 'floor', spine: 'neutral', prop: 'wall' },
+  },
+  incline_pushup: {
+    palm: 'flat', label: 'Κάμψεις με κλίση σε καρέκλα', tempo: 3.0, prof: [0.46, 0.08, 0.46], yaw: 1.20, floor: true, flatFeet: false,
+    frame: { h: 2.05, w: 2.45, cy: 0.65 },
+    A: incPushA, B: incPushB,
+    keys: phases(incPushA, incPushB, { toB: 0.46, hold: 0.08, easeDown: 'inOut', easeUp: 'out' }),
+    ik: { feet: 'toe', stanceW: 0.24, hands: 'bench_push', handExtraW: 0.06, forearmTwist: -1.35, elbowFlare: 0.38, grip: 'chair', spine: 'neutral', prop: 'bench' },
+  },
+  knee_side_plank: {
+    palm: 'flat', label: 'Πλάγια σανίδα στα γόνατα', tempo: 3.0, yaw: 0.32, floor: true, hold: true, flatFeet: false,
+    frame: { h: 1.70, w: 2.20, cy: 0.44 },
+    A: kneeSidePlankP, B: kneeSidePlankP,
+    keys: [{ t: 0, p: kneeSidePlankP }, { t: 1, p: kneeSidePlankP }],
+    ik: { feet: 'knee_side_plank', hands: 'side_plank', forearmTwist: -1.30, elbowFlare: 0.35, grip: 'floor', spine: 'neutral' },
+  },
+  plank_shoulder_tap: {
+    palm: 'flat', label: 'Σανίδα με επαφή ώμων', tempo: 2.4, prof: [0.40, 0.16, 0.44], yaw: 0.92, floor: true, flatFeet: false, alt: true,
+    A: tapA, B: tapB,
+    keys: phases(tapA, tapB, { toB: 0.40, hold: 0.16, easeDown: 'out', easeUp: 'inOut' }),
+    ik: { feet: 'toe', stanceW: 0.32, hands: 'plank_tap', handExtraW: 0.04, forearmTwist: -1.35, elbowFlare: 0.26, grip: 'floor', spine: 'neutral' },
+  },
+  leg_raise: {
+    label: 'Ανυψώσεις ποδιών (ύπτια)', tempo: 3.2, prof: [0.44, 0.12, 0.44], yaw: 1.25, floor: true, flatFeet: false,
+    frame: { h: 1.85, w: 2.55, cy: 0.46 },
+    A: legRaiseA, B: legRaiseB,
+    keys: phases(legRaiseA, legRaiseB, { toB: 0.44, hold: 0.12, easeDown: 'out', easeUp: 'inOut' }),
+    ik: { feet: 'free', hands: 'free', forearmTwist: -1.35, elbowFlare: 0.18, grip: 'open', spine: 'flex' },
+  },
+  bicycle_crunch: {
+    label: 'Ποδήλατο κοιλιακών', tempo: 2.0, prof: [0.44, 0.10, 0.46], yaw: 1.10, floor: true, flatFeet: false, alt: true,
+    A: bikeA, B: bikeB,
+    keys: phases(bikeA, bikeB, { toB: 0.44, hold: 0.10, easeDown: 'out', easeUp: 'inOut' }),
+    ik: { feet: 'free', hands: 'free', forearmTwist: 0.6, elbowFlare: 0.72, grip: 'open', spine: 'twist' },
+  },
+  cat_cow: {
+    palm: 'flat', label: 'Γάτα-Αγελάδα (Cat-Cow)', tempo: 4.0, prof: [0.42, 0.16, 0.42], yaw: 1.22, floor: true, flatFeet: false,
+    A: catCowA, B: catCowB,
+    keys: phases(catCowA, catCowB, { toB: 0.42, hold: 0.16, easeDown: 'inOut', easeUp: 'inOut' }),
+    ik: { feet: 'quadruped', stanceW: 0.24, hands: 'quadruped', handExtraW: 0.02, forearmTwist: -1.35, elbowFlare: 0.22, grip: 'floor', spine: 'flex' },
+  },
+  child_pose: {
+    palm: 'flat', label: 'Διάταση παιδιού (Child pose)', tempo: 4.0, yaw: 1.22, floor: true, hold: true, flatFeet: false,
+    frame: { h: 1.65, w: 2.35, cy: 0.34 },
+    A: childPoseP, B: childPoseP,
+    keys: [{ t: 0, p: childPoseP }, { t: 1, p: childPoseP }],
+    ik: { feet: 'child_pose', stanceW: 0.28, hands: 'child_pose', handExtraW: 0.02, forearmTwist: -1.35, elbowFlare: 0.24, grip: 'floor', spine: 'flex' },
+  },
+  box_squat: {
+    label: 'Καθίσματα σε καρέκλα (Box squat)', tempo: 3.2, prof: [0.44, 0.16, 0.40], yaw: 1.02, noZ: true,
+    frame: { h: 2.35, w: 2.15, cy: 0.80 },
+    A: boxSquatA, B: boxSquatB,
+    keys: phases(boxSquatA, boxSquatB, { toB: 0.44, hold: 0.16, easeDown: 'inOut', easeUp: 'out' }),
+    ik: { feet: 'box_squat', stanceW: 0.36, footZ: 0.18, toeOut: 0.20, hands: 'free', forearmTwist: 0, elbowFlare: 0.30, grip: 'relaxed', spine: 'neutral', prop: 'bench' },
+  },
+  bulgarian_split_squat: {
+    label: 'Βουλγαρικά καθίσματα (Bulgarian split squat)', tempo: 3.4, prof: [0.46, 0.10, 0.44], yaw: 1.08, alt: true, noZ: true,
+    frame: { h: 2.35, w: 2.35, cy: 0.82 },
+    A: bssA, B: bssB,
+    keys: phases(bssA, bssB, { toB: 0.46, hold: 0.10, easeDown: 'inOut', easeUp: 'out' }),
+    ik: { feet: 'bulgarian', stanceW: 0.26, toeOut: 0.06, hands: 'free', forearmTwist: 0, elbowFlare: 0.22, grip: 'relaxed', spine: 'neutral', prop: 'bench' },
+  },
+  side_lunge: {
+    label: 'Πλάγιες εκπτώσεις (Side lunge)', tempo: 3.4, prof: [0.46, 0.10, 0.44], yaw: 0.22, alt: true, noZ: true,
+    frame: { h: 2.30, w: 2.10, cy: 0.80 },
+    A: sideLungeA, B: sideLungeB,
+    keys: [
+      { t: 0.00, p: sideLungeA },
+      { t: 0.18, p: sideLungeStep, ease: 'cubic' },
+      { t: 0.46, p: sideLungeB, ease: 'inOut' },
+      { t: 0.56, p: sideLungeB, ease: 'linear' },
+      { t: 0.84, p: sideLungeStep, ease: 'out' },
+      { t: 1.00, p: sideLungeA, ease: 'cubic' },
+    ],
+    ik: { feet: 'side_lunge', stanceW: 0.26, toeOut: 0.08, hands: 'free', forearmTwist: 0, elbowFlare: 0.24, grip: 'relaxed', spine: 'neutral' },
+  },
+  seated_overhead_press: {
+    palm: 'fwd', label: 'Καθιστές πιέσεις ώμων', tempo: 3.0, prof: [0.42, 0.12, 0.46], yaw: 0.52, noZ: true,
+    frame: { h: 2.25, w: 1.95, cy: 0.86 },
+    A: seatOhpA, B: seatOhpB,
+    keys: phases(seatOhpA, seatOhpB, { toB: 0.42, hold: 0.12, easeDown: 'out', easeUp: 'inOut' }),
+    ik: { feet: 'seated', stanceW: 0.30, footZ: 0.36, toeOut: 0.10, hands: 'ohp', forearmTwist: -1.25, elbowFlare: 0.42, grip: 'dumbbell', spine: 'neutral', prop: 'bench' },
+  },
+  bench_press: {
+    palm: 'fwd', label: 'Πιέσεις στήθους σε πάγκο (Bench press)', tempo: 3.0, prof: [0.44, 0.10, 0.46], yaw: 1.08, floor: true,
+    frame: { h: 1.85, w: 2.35, cy: 0.62 },
+    A: benchPressA, B: benchPressB,
+    keys: phases(benchPressA, benchPressB, { toB: 0.44, hold: 0.10, easeDown: 'out', easeUp: 'inOut' }),
+    ik: { feet: 'bench_press', stanceW: 0.46, toeOut: 0.16, hands: 'bench_press', forearmTwist: -1.25, elbowFlare: 0.52, grip: 'dumbbell', spine: 'neutral', prop: 'bench_flat' },
+  },
+  tricep_kickback: {
+    label: 'Εκτάσεις τρικεφάλων (Kickbacks)', tempo: 2.8, prof: [0.40, 0.16, 0.44], yaw: 1.05,
+    A: kickbackA, B: kickbackB,
+    keys: phases(kickbackA, kickbackB, { toB: 0.40, hold: 0.16, easeDown: 'out', easeUp: 'inOut' }),
+    ik: { feet: 'planted', stanceW: 0.28, toeOut: 0.12, hands: 'kickback', forearmTwist: 0, elbowFlare: 0.08, grip: 'dumbbell', spine: 'neutral' },
+  },
+  tricep_extension: {
+    label: 'Υπερέκταση τρικεφάλων πάνω από το κεφάλι', tempo: 3.0, prof: [0.42, 0.14, 0.44], yaw: 0.68,
+    frame: { h: 2.48, w: 1.75, cy: 0.96 },
+    A: triExtA, B: triExtB,
+    keys: phases(triExtA, triExtB, { toB: 0.42, hold: 0.14, easeDown: 'out', easeUp: 'inOut' }),
+    ik: { feet: 'planted', stanceW: 0.28, toeOut: 0.10, hands: 'tricep_ext', forearmTwist: 0, elbowFlare: 0.14, grip: 'dumbbell', spine: 'neutral' },
+  },
+  pull_up: {
+    palm: 'fwd', label: 'Έλξεις σε μονόζυγο (Pull-up)', tempo: 3.2, prof: [0.42, 0.14, 0.44], yaw: 0.52, floor: true, flatFeet: false,
+    frame: { h: 2.75, w: 2.10, cy: 1.25 },
+    A: pullUpA, B: pullUpB,
+    keys: phases(pullUpA, pullUpB, { toB: 0.42, hold: 0.14, easeDown: 'out', easeUp: 'inOut' }),
+    ik: { feet: 'hang', hands: 'pullup_bar', forearmTwist: -1.30, elbowFlare: 0.55, grip: 'bar', spine: 'neutral', prop: 'pullup_bar' },
+  },
+  one_arm_row: {
+    label: 'Κωπηλατική με έναν αλτήρα σε πάγκο', tempo: 3.0, prof: [0.40, 0.14, 0.46], yaw: 1.02, floor: true,
+    frame: { h: 2.05, w: 2.35, cy: 0.68 },
+    A: oneArmRowA, B: oneArmRowB,
+    keys: phases(oneArmRowA, oneArmRowB, { toB: 0.40, hold: 0.14, easeDown: 'out', easeUp: 'inOut' }),
+    ik: { feet: 'one_arm_row', hands: 'one_arm_row', forearmTwist: 0, elbowFlare: 0.14, grip: 'dumbbell', spine: 'neutral', prop: 'bench_flat' },
+  },
+  squat_jump: {
+    label: 'Άλματα από κάθισμα (Squat jump)', tempo: 2.0, yaw: 0.85, noZ: true,
+    frame: { h: 2.95, w: 1.95, cy: 1.10 },
+    A: sqJumpLoad, B: sqJumpAir,
+    keys: [
+      { t: 0.00, p: sqJumpLoad },
+      { t: 0.36, p: sqJumpAir, ease: 'out' },
+      { t: 0.52, p: sqJumpAir, ease: 'linear' },
+      { t: 0.74, p: sqJumpLand, ease: 'in' },
+      { t: 1.00, p: sqJumpLoad, ease: 'inOut' },
+    ],
+    ik: { feet: 'squat_jump', stanceW: 0.34, toeOut: 0.20, hands: 'free', forearmTwist: 0, elbowFlare: 0.30, grip: 'open', spine: 'neutral' },
+  },
+  skater_jump: {
+    label: 'Άλματα πατινάζ (Skater jump)', tempo: 1.8, yaw: 0.22, alt: true, noZ: true,
+    frame: { h: 2.35, w: 2.20, cy: 0.88 },
+    A: skaterA, B: skaterAir,
+    keys: [
+      { t: 0.00, p: skaterA },
+      { t: 0.38, p: skaterAir, ease: 'out' },
+      { t: 0.56, p: skaterLand, ease: 'in' },
+      { t: 0.72, p: skaterLand, ease: 'linear' },
+      { t: 1.00, p: skaterA, ease: 'inOut' },
+    ],
+    ik: { feet: 'skater', stanceW: 0.26, hands: 'free', forearmTwist: 0, elbowFlare: 0.26, grip: 'open', spine: 'twist' },
+  },
+  step_calf_raise: {
+    label: 'Ανυψώσεις γάμπας σε σκαλί', tempo: 2.6, prof: [0.40, 0.20, 0.40], yaw: 1.02, noZ: true,
+    frame: { h: 2.50, w: 1.95, cy: 1.02 },
+    A: stepCalfA, B: stepCalfB,
+    keys: phases(stepCalfA, stepCalfB, { toB: 0.40, hold: 0.20, easeDown: 'out', easeUp: 'inOut' }),
+    ik: { feet: 'step_calf', stanceW: 0.22, toeOut: 0.05, hands: 'free', forearmTwist: 0, elbowFlare: 0.18, grip: 'relaxed', spine: 'neutral', prop: 'step' },
+  },
+  march_in_place: {
+    label: 'Περπάτημα επί τόπου', tempo: 1.7, yaw: 0.62, alt: true, noZ: true,
+    A: marchA, B: marchB,
+    keys: [
+      { t: 0.00, p: marchA },
+      { t: 0.44, p: marchB, ease: 'out' },
+      { t: 0.56, p: marchB, ease: 'linear' },
+      { t: 1.00, p: marchA, ease: 'inOut' },
+    ],
+    ik: { feet: 'march', stanceW: 0.24, toeOut: 0.06, hands: 'free', forearmTwist: 0, elbowFlare: 0.18, grip: 'relaxed', spine: 'neutral' },
+  },
+  jump_rope: {
+    label: 'Σχοινάκι', tempo: 0.95, yaw: 0.42, noZ: true,
+    frame: { h: 2.55, w: 2.15, cy: 0.98 },
+    A: ropeA, B: ropeB,
+    keys: [
+      { t: 0.00, p: ropeA },
+      { t: 0.40, p: ropeB, ease: 'out' },
+      { t: 0.58, p: ropeB, ease: 'linear' },
+      { t: 1.00, p: ropeA, ease: 'in' },
+    ],
+    ik: { feet: 'jump_rope', stanceW: 0.18, toeOut: 0.05, hands: 'jump_rope', forearmTwist: 0, elbowFlare: 0.20, grip: 'bar', spine: 'neutral', prop: 'jump_rope' },
+  },
+  farmer_walk: {
+    label: 'Βάδισμα αγρότη (Farmer walk)', tempo: 1.8, yaw: 0.65, alt: true, noZ: true,
+    A: farmerA, B: farmerB,
+    keys: [
+      { t: 0.00, p: farmerA },
+      { t: 0.44, p: farmerB, ease: 'inOut' },
+      { t: 0.56, p: farmerB, ease: 'linear' },
+      { t: 1.00, p: farmerA, ease: 'inOut' },
+    ],
+    ik: { feet: 'march', stanceW: 0.26, toeOut: 0.08, hands: 'farmer', forearmTwist: 0, elbowFlare: 0.08, grip: 'dumbbell', spine: 'neutral' },
+  },
+  trx_y_raise: {
+    label: 'TRX Y-raise (ανάταση Υ)', tempo: 3.0, prof: [0.42, 0.14, 0.44], yaw: 0.95, floor: true,
+    frame: { h: 2.75, w: 2.50, cy: 1.20 },
+    A: trxYA, B: trxYB,
+    keys: phases(trxYA, trxYB, { toB: 0.42, hold: 0.14, easeDown: 'out', easeUp: 'inOut' }),
+    ik: { feet: 'planted', stanceW: 0.28, footZ: 0.42, toeOut: 0.08, hands: 'trx_y', handW: 0.36, forearmTwist: 0, elbowFlare: 0.45, grip: 'trx', spine: 'neutral' },
   },
 };
 
@@ -486,49 +869,97 @@ export function sampleCycle(motion, t01, alt = false, out = {}) {
   return clampPose(out);
 }
 
-/**
- * Κανόνες αναγνώρισης κίνησης από ελληνικά & αγγλικά ονόματα ασκήσεων.
- * Οι πιο εξειδικευμένοι κανόνες προηγούνται ώστε να μην «κλέβονται» από γενικούς.
- */
 /** Αφαίρεση τόνων: στα ελληνικά ο τόνος μετακινείται με την κλίση («δικέφαλος» → «δικεφάλων»),
  *  οπότε οι κανόνες ταιριάζουν πάντα σε κείμενο χωρίς τόνους. */
 export const deaccent = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
+/**
+ * Κανόνες αναγνώρισης κίνησης από ελληνικά & αγγλικά ονόματα ασκήσεων (ΟΛΑ τα regex ΧΩΡΙΣ ελληνικούς τόνους).
+ * Οι πιο εξειδικευμένοι κανόνες προηγούνται ώστε να μην «κλέβονται» από γενικούς.
+ */
 const RULES = [
+  // ---- Εξειδικευμένες ασκήσεις εδάφους & κινητικότητας ----
+  [/cat.?cow|γατα.?αγελαδ|αγελαδ.?γατα/i, 'cat_cow'],
+  [/child.?s?\s*pose|διαταση\s*παιδι|σταση\s*παιδι|θεση\s*παιδι/i, 'child_pose'],
   [/mountain.?climb|ορειβατ/i, 'mountain_climber'],
-  [/burpee|μπερπι|μπερπι/i, 'burpee'],
+  [/burpee|μπερπι/i, 'burpee'],
   [/dead.?bug|νεκρο\s*εντομ/i, 'dead_bug'],
   [/bird.?dog|διαγωνια\s*εκταση|στα\s*τεσσερα|τετραποδ|quadruped|superman.*γονατ/i, 'bird_dog'],
-  [/superman|σουπερμαν|σουπερμαν|υπερεκταση\s*ραχ|ραχιαι/i, 'superman'],
+  [/superman|σουπερμαν|υπερεκταση\s*ραχ|ραχιαι/i, 'superman'],
+  [/bicycle|ποδηλατ.*κοιλ|κοιλ.*ποδηλατ/i, 'bicycle_crunch'],
+  [/leg\s*raise|ανυψωσ(η|εις)\s*ποδι|αρσ(η|εις)\s*ποδι/i, 'leg_raise'],
+  [/(side\s*plank|πλαγια\s*σανιδ|πλαινη\s*σανιδ|πλαγιο\s*πλανκ).*(knee|γονατ)|(knee|γονατ).*(side\s*plank|πλαγια\s*σανιδ|πλαινη\s*σανιδ)/i, 'knee_side_plank'],
   [/side\s*plank|πλαγια\s*σανιδ|πλαινη\s*σανιδ|πλαγιο\s*πλανκ/i, 'side_plank'],
+  [/shoulder\s*tap|(plank|σανιδ|πλανκ).*(επαφ.*ωμ|αγγιγμ.*ωμ|tap)/i, 'plank_shoulder_tap'],
   [/russian\s*twist|ρωσικ|στροφες\s*κορμου/i, 'russian_twist'],
-  [/wall\s*sit|καθισμα.*τοιχ|τοιχ.*καθισμα|ισομετρικ.*καθισμα/i, 'wall_sit'],
-  [/step.?up|box\s*step|ανεβασμα.*(σκαλ|κουτ|παγκ|box)|σκαλοπατ/i, 'step_up'],
-  [/hip\s*thrust|ωθησ.*ισχι|ωθησ.*ισχι|ανυψωση\s*λεκανης.*παγκ/i, 'hip_thrust'],
-  [/reverse\s*lunge|οπισθι.*(προβολ|εκπτωσ)|πισω\s*(προβολ|εκπτωσ)/i, 'reverse_lunge'],
-  [/triceps?\s*dip|chair\s*dip|bench\s*dip|βυθισ.*(τρικεφ|καρεκλ|παγκ)|βουτι.*(τρικεφ|καρεκλ|παγκ)|\bdips?\b/i, 'triceps_dip'],
+
+  // ---- Παραλλαγές κάμψεων (πριν από το γενικό pushup!) ----
+  [/wall\s*push.?up|(push.?up|καμψ(η|εις)).*(τοιχ|wall)|(τοιχ|wall).*(push.?up|καμψ(η|εις))/i, 'wall_pushup'],
+  [/incline\s*push.?up|elevated\s*push.?up|(push.?up|καμψ(η|εις)).*(καρεκλ|παγκ|bench|chair|κλισ|υπερυψ)/i, 'incline_pushup'],
+  [/knee\s*push.?up|modified\s*push.?up|(push.?up|καμψ(η|εις)).*(γονατ|knee)/i, 'knee_pushup'],
+
+  // ---- Εξειδικευμένες ασκήσεις λάστιχου (Task B) ----
+  [/pallof|παλοφ|αντι.?στροφ/i, 'pallof_press'],
+  [/wood.?chop|ξυλοκοπ|διαγωνι.*στροφ.*(λαστιχ|κορμ)/i, 'woodchop'],
+  [/face\s*pull|ελξ.*προσωπ|τραβηγμ.*προσωπ/i, 'face_pull'],
+  [/lat\s*pull.?down|pulldown|ελξ.*πλατ.*(λαστιχ|ψηλ|τροχαλ)|κατεβασμ.*πλατ/i, 'lat_pulldown'],
   [/band\s*pull.?apart|pull.?apart|διανοιξη.*λαστιχ|ανοιγματα.*λαστιχ|ανοιγμα.*λαστιχ/i, 'band_pull_apart'],
+  [/(band|λαστιχ).*(chest\s*press|πιεσ.*στηθ)|(chest\s*press|πιεσ.*στηθ).*(band|λαστιχ)/i, 'band_chest_press'],
+  [/(standing|ορθι|σταθερ|chest.?height|υψος\s*στηθ).*(band|λαστιχ).*(row|κωπηλ)|(row|κωπηλ).*(band|λαστιχ).*(standing|ορθι|σταθερ|chest|στηθ)|(band|λαστιχ).*(row|κωπηλ).*(standing|ορθι|σταθερ)/i, 'standing_row'],
+
+  // ---- TRX (y-raise πριν από τα υπόλοιπα!) ----
+  [/(trx|ιμαντ|suspension).*(y.?raise|y\s*fly|αναταση\s*y|\by\b)|(y.?raise).*(trx|ιμαντ|suspension)/i, 'trx_y_raise'],
   [/(trx|ιμαντ|suspension).*(chest|push|press)|(chest|στηθ|πιεσ).*(trx|ιμαντ|suspension)/i, 'trx_chest_press'],
   [/(trx|ιμαντ|suspension).*(squat|καθισμ|σκουατ)|(squat|καθισμ|σκουατ).*(trx|ιμαντ|suspension)/i, 'trx_squat'],
   [/(trx|ιμαντ|suspension).*(row|κωπηλ|ελξ)|(row|κωπηλ|ελξ).*(trx|ιμαντ|suspension)|inverted\s*row|αντιστροφη\s*κωπηλ/i, 'incline_row'],
+
+  // ---- Μονόζυγο, Κωπηλατική με έναν αλτήρα, Τρικέφαλοι, Πάγκος ----
+  [/pull.?up|chin.?up|μονοζυγ|ελξ(η|εις).*(μονοζυγ|μπαρα\s*ελξ)/i, 'pull_up'],
+  [/(one.?arm|single.?arm|εναν\s*αλτηρ|ενα\s*χερ|μονο\s*αλτηρ).*(row|κωπηλ)|(row|κωπηλ).*(one.?arm|single.?arm|εναν\s*αλτηρ|ενα\s*χερ|μονο\s*αλτηρ)/i, 'one_arm_row'],
+  [/kick.?back|κι.?κμπακ|[tτ]ricep.*kick/i, 'tricep_kickback'],
+  [/([tτ]ricep.*ext|overhead.*[tτ]ricep|υπερεκτασ.*τρικεφ|εκτασ.*τρικεφ|γαλλικ.*πιεσ|skull\s*crush)/i, 'tricep_extension'],
+  [/triceps?\s*dip|chair\s*dip|bench\s*dip|βυθισ.*(τρικεφ|καρεκλ|παγκ)|βουτι.*(τρικεφ|καρεκλ|παγκ)|\bdips?\b/i, 'triceps_dip'],
+  [/bench\s*press|floor\s*press|πιεσ(η|εις)\s*στηθ|πιεσ(η|εις)\s*σε\s*παγκ|chest\s*press/i, 'bench_press'],
+  [/(seated|καθιστ).*(overhead|shoulder\s*press|πιεσ.*ωμ|πρεσ.*ωμ)|(overhead|shoulder\s*press|πιεσ.*ωμ|πρεσ.*ωμ).*(seated|καθιστ)/i, 'seated_overhead_press'],
+
+  // ---- Πόδια: γάμπα σε σκαλί, Bulgarian, box squat, side lunge, άλματα (πριν από γενικά!) ----
+  [/(calf|γαμπ|toe\s*raise).*(step|σκαλ|βαθμιδ|υπερυψ)|(step|σκαλ).*(calf|γαμπ)/i, 'step_calf_raise'],
+  [/bulgarian|βουλγαρικ|rear\s*foot\s*elevated|rfe\s*split/i, 'bulgarian_split_squat'],
+  [/box\s*squat|chair\s*squat|(squat|καθισμ|σκουατ).*(καρεκλ|κουτ|παγκ|box|chair)/i, 'box_squat'],
+  [/side\s*lunge|lateral\s*lunge|πλαγι(α|ες)\s*(εκπτωσ|προβολ)/i, 'side_lunge'],
+  [/squat\s*jump|jump\s*squat|αλμ.*καθισμ|καθισμ.*αλμ/i, 'squat_jump'],
+  [/skater|πατιναζ|πλαγι.*αλμ/i, 'skater_jump'],
+  [/wall\s*sit|καθισμα.*τοιχ|τοιχ.*καθισμα|ισομετρικ.*καθισμα/i, 'wall_sit'],
+  [/step.?up|box\s*step|ανεβασμα.*(σκαλ|κουτ|παγκ|box)|σκαλοπατ/i, 'step_up'],
+  [/hip\s*thrust|ωθησ.*ισχι|ανυψωση\s*λεκανης.*παγκ/i, 'hip_thrust'],
+  [/reverse\s*lunge|οπισθι.*(προβολ|εκπτωσ)|πισω\s*(προβολ|εκπτωσ)/i, 'reverse_lunge'],
+
+  // ---- Καρδιοαναπνευστικές / Βάδισμα / Σχοινάκι (πριν από high_knees & jumping_jack!) ----
+  [/jump\s*rope|skipping\s*rope|σχοινακ/i, 'jump_rope'],
+  [/farmer.?s?\s*(walk|carry)|βαδισμ.*αγροτ|περπατημ.*αλτηρ/i, 'farmer_walk'],
+  [/march\s*in\s*place|walk\s*in\s*place|περπατημ.*επι\s*τοπ|βαδην\s*επι\s*τοπ|επι\s*τοπ.*περπατημ/i, 'march_in_place'],
+
+  // ---- Μπάρα / RDL / Deadlift ----
   [/back\s*squat|barbell.*squat|καθισμα.*μπαρα.*πλατ|καθισματα.*μπαρα|μπαρα.*πλατ/i, 'back_squat'],
   [/barbell.*row|bent.?over.*row|κωπηλατικ.*μπαρα|μπαρα.*κωπηλατικ/i, 'barbell_row'],
   [/romanian|rdl|ρουμανικ|good.?morning|swing|hip\s*hinge|ελξη\s*ισχιου/i, 'hinge'],
   [/deadlift|αρσ(η|εις)\s*θανατ|νεκρ(η|ες)\s*αρσ/i, 'deadlift'],
-  [/jumping|jack|ανοιχτα\s*αλματα|αλματα\s*ανοι/i, 'jumping_jack'],
+
+  // ---- Γενικοί κανόνες ----
+  [/curl|δικεφαλ|biceps/i, 'curl'],
+  [/jumping\s*jack|ανοιχτα\s*αλματα|αλματα\s*ανοι|\bjack/i, 'jumping_jack'],
   [/high.?knee|ψηλα\s*γονατα|τρεξιμο|jog|βαδην|march|skip/i, 'high_knees'],
   [/push.?up|καμψεις|καμψη.*(στηριξη|ωμων|στηθ)|pushup/i, 'pushup'],
   [/plank|σανιδα|πλανκ/i, 'plank'],
   [/lunge|εκπτωσ|προβολ|split\s*squat/i, 'lunge'],
   [/squat|καθισματα|καθισμα|σκουατ/i, 'squat'],
-  [/row|κωπηλ|ελξη|pull/i, 'row'],
+  [/row|κωπηλ|ελξ(η|εις)|pull/i, 'row'],
   [/overhead|shoulder\s*press|military|πιεσεις\s*ωμων|πρεσα\s*ωμων|arnold/i, 'overhead_press'],
   [/lateral|πλαγι(α|ες)\s*ανυψω|side\s*raise/i, 'lateral_raise'],
-  [/curl|δικεφαλ|biceps/i, 'curl'],
-  [/crunch|κοιλιακ|sit.?up|bicycle|leg\s*raise/i, 'crunch'],
+  [/crunch|κοιλιακ|sit.?up/i, 'crunch'],
   [/bridge|γεφυρα|glute|γλουτ/i, 'glute_bridge'],
   [/calf|γαμπ|toe\s*raise/i, 'calf_raise'],
-  [/bench|στηθους|chest/i, 'generic'],
+  [/bench|στηθους|chest/i, 'bench_press'],
 ];
 
 export function inferMotion(ex) {
@@ -539,15 +970,23 @@ export function inferMotion(ex) {
     m = (RULES.find(([re]) => re.test(name)) || [, 'generic'])[1];
   }
   const hasTrx = /trx|ιμαντ|suspension/i.test(eqText);
-  const hasBar = /barbell|μπαρα(?!\s*(ελξ|ελξ|pull))|\bbar\b(?!\s*pull)/i.test(eqText);
+  const hasBand = /λαστιχ|band|resistance|ελαστικ/i.test(eqText);
+  const hasBar = /barbell|μπαρα(?!\s*(ελξ|pull))|\bbar\b(?!\s*pull)/i.test(eqText);
+
   if (hasTrx) {
-    if (m === 'row') m = 'incline_row';
+    if (/\by\b.?raise|αναταση\s*y|y\s*fly/i.test(eqText)) m = 'trx_y_raise';
+    else if (m === 'row' || m === 'standing_row') m = 'incline_row';
     else if (m === 'squat') m = 'trx_squat';
-    else if (m === 'pushup' || m === 'generic') {
+    else if (m === 'pushup' || m === 'generic' || m === 'bench_press') {
       if (/chest|στηθ|press|πιεσ|push/i.test(eqText)) m = 'trx_chest_press';
     }
   }
-  if (hasBar) {
+  if (hasBand && !hasTrx) {
+    // Όρθια κωπηλατική με λάστιχο (εκτός αν ζητηθεί ρητά σκυφτή/bent-over)
+    if (m === 'row' && !/bent.?over|σκυφτ/i.test(eqText)) m = 'standing_row';
+    else if (m === 'bench_press' && !/bench|παγκ|floor|δαπεδ/i.test(eqText)) m = 'band_chest_press';
+  }
+  if (hasBar && !hasTrx) {
     if (m === 'squat' && !/front|μπροστ/i.test(eqText)) m = 'back_squat';
     else if (m === 'row') m = 'barbell_row';
   }

@@ -1,31 +1,66 @@
 // Εξοπλισμός & σκηνικά όργανα που κρατά/χρησιμοποιεί ο coach.
-// Ρεαλιστικά PBR υλικά, δυναμικά καμπύλα λάστιχα (zero-GC buffer update),
-// ιμάντες TRX με διακλάδωση Y, Ολυμπιακή μπάρα (δίσκοι 45cm), πάγκος, σκαλοπάτι και τοίχος.
+// Ρεαλιστικά PBR υλικά, δυναμικά καμπύλα λάστιχα με σύστημα αγκύρωσης (pole/door anchor),
+// ιμάντες TRX με διακλάδωση Y, Ολυμπιακή μπάρα, μονόζυγο πόρτας, σχοινάκι, πάγκοι, σκαλοπάτι και τοίχος.
 import * as THREE from './vendor/three.module.min.js';
 
 const da = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // χωρίς τόνους
+
 const RULES = {
   straps: /trx|ιμαντ|suspension|strap|αιωρουμεν/i,
-  band: /λαστιχ|band|resistance|ελαστικ|λαστιχα|pull.?apart/i,
-  kettlebell: /kettle|κετλ|κετλ/i,
-  barbell: /barbell|μπαρα(?!\s*(ελξ|ελξ|pull))|\bbar\b(?!\s*pull)/i,
+  band: /λαστιχ|band|resistance|ελαστικ|pull.?apart|pallof|face\s*pull|wood.?chop/i,
+  kettlebell: /kettle|κετλ/i,
+  barbell: /barbell|μπαρα(?!\s*(ελξ|pull))|\bbar\b(?!\s*pull)/i,
   dumbbells: /αλτηρ|dumbbell|\bdb\b|μπουκαλι/i,
   mat: /στρωμα|mat\b|yoga|γιογκα/i,
 };
 
 const FLOOR_MOTIONS = [
-  'pushup', 'plank', 'crunch', 'glute_bridge', 'bird_dog',
-  'mountain_climber', 'dead_bug', 'superman', 'side_plank', 'russian_twist',
-];
-const NO_HAND_WEIGHTS = [
-  'pushup', 'plank', 'jumping_jack', 'high_knees', 'bird_dog',
-  'mountain_climber', 'burpee', 'superman', 'side_plank', 'triceps_dip',
+  'pushup', 'knee_pushup', 'plank', 'plank_shoulder_tap',
+  'crunch', 'leg_raise', 'bicycle_crunch', 'glute_bridge',
+  'bird_dog', 'cat_cow', 'child_pose', 'mountain_climber',
+  'dead_bug', 'superman', 'side_plank', 'knee_side_plank', 'russian_twist',
 ];
 
-/** Επιστρέφει {dumbbells, kettlebell, band, straps, barbell, mat, goblet, bench, step, wall} για μια άσκηση. */
+const NO_HAND_WEIGHTS = [
+  'pushup', 'knee_pushup', 'wall_pushup', 'incline_pushup',
+  'plank', 'plank_shoulder_tap', 'jumping_jack', 'high_knees', 'march_in_place',
+  'bird_dog', 'cat_cow', 'child_pose', 'mountain_climber', 'burpee',
+  'superman', 'side_plank', 'knee_side_plank', 'triceps_dip', 'pull_up',
+  'leg_raise', 'bicycle_crunch', 'jump_rope',
+];
+
+const BAND_MOTIONS = {
+  standing_row: 'front_chest',
+  face_pull: 'front_high',
+  lat_pulldown: 'front_high',
+  band_chest_press: 'behind_chest',
+  pallof_press: 'side_waist',
+  woodchop: 'side_high',
+  band_pull_apart: 'hands',
+};
+
+const DEFAULT_DB_MOTIONS = [
+  'farmer_walk', 'tricep_kickback', 'tricep_extension', 'bench_press', 'seated_overhead_press',
+];
+
+/** Προσδιορίζει το σημείο αγκύρωσης λάστιχου (anchor) από το όνομα/εξοπλισμό & την κίνηση. */
+export function resolveBandAnchor(ex, motion) {
+  if (motion && BAND_MOTIONS[motion]) return BAND_MOTIONS[motion];
+  const text = da(`${ex?.equipment || ''} ${ex?.name || ''} ${ex?.youtube_query || ''}`);
+  if (/pull.?apart|διανοιξ/i.test(text)) return 'hands';
+  if (/pallof|παλοφ|αντι.?στροφ/i.test(text)) return 'side_waist';
+  if (/wood.?chop|ξυλοκοπ/i.test(text)) return 'side_high';
+  if (/face\s*pull|lat\s*pull|pulldown|ψηλ.*αγκυρ|high\s*anchor|overhead\s*anchor/i.test(text)) return 'front_high';
+  if (/low\s*anchor|χαμηλ.*αγκυρ/i.test(text)) return 'front_low';
+  if (/(chest\s*press|πιεσ.*στηθ|behind|πισω)/i.test(text)) return 'behind_chest';
+  if (/(door|πορτ|chest.?height|υψος\s*στηθ|standing.*row|ορθι.*κωπηλ)/i.test(text)) return 'front_chest';
+  return 'feet';
+}
+
+/** Επιστρέφει τον εξοπλισμό {dumbbells, singleDumbbell, kettlebell, band, straps, barbell, mat, goblet, bench, benchStyle, step, wall, pullupBar, jumpRope} για μια άσκηση. */
 export function equipmentFor(ex, motion) {
-  const eq = da(ex.equipment);
-  const nm = da(`${ex.name || ''} ${ex.youtube_query || ''}`);
+  const eq = da(ex?.equipment);
+  const nm = da(`${ex?.name || ''} ${ex?.youtube_query || ''}`);
   const text = `${eq} ${nm}`;
   const has = k => RULES[k].test(eq) || (k !== 'mat' && RULES[k].test(nm));
   const e = {};
@@ -33,25 +68,64 @@ export function equipmentFor(ex, motion) {
 
   if (/σωμα|bodyweight|χωρις/i.test(eq) && !/αλτηρ|λαστιχ|band|kettle|μπαρα/i.test(eq)) {
     for (const k of ['dumbbells', 'kettlebell', 'barbell', 'band', 'straps']) {
-      if (!RULES[k].test(da(ex.name))) delete e[k];
+      if (!RULES[k].test(da(ex?.name))) delete e[k];
     }
   }
   if (/goblet|κυπελλο/i.test(text)) e.goblet = true;
 
-  // Αυτόματη αντιστοίχιση εξοπλισμού βάσει εξειδικευμένων ασκήσεων
+  // Αυτόματη αντιστοίχιση εξοπλισμού & props βάσει εξειδικευμένων ασκήσεων
   if (motion === 'deadlift' || motion === 'back_squat' || motion === 'barbell_row') e.barbell = true;
-  if (motion === 'band_pull_apart') e.band = true;
-  if (motion === 'incline_row' || motion === 'trx_squat' || motion === 'trx_chest_press') e.straps = true;
-  if (motion === 'triceps_dip' || motion === 'hip_thrust') e.bench = true;
-  if (motion === 'step_up') e.step = true;
-  if (motion === 'wall_sit') e.wall = true;
+  if (motion && BAND_MOTIONS[motion]) e.band = { anchor: BAND_MOTIONS[motion] };
+  if (motion === 'incline_row' || motion === 'trx_squat' || motion === 'trx_chest_press' || motion === 'trx_y_raise') e.straps = true;
 
+  if (motion === 'triceps_dip' || motion === 'hip_thrust' || motion === 'box_squat' ||
+      motion === 'bulgarian_split_squat' || motion === 'incline_pushup' || motion === 'seated_overhead_press') {
+    e.bench = true;
+  }
+  if (motion === 'bench_press') {
+    e.bench = true;
+    e.benchStyle = 'flat';
+  }
+  if (motion === 'one_arm_row') {
+    e.bench = true;
+    e.benchStyle = 'flat';
+    e.singleDumbbell = 'R';
+    delete e.dumbbells;
+  }
+  if (motion === 'step_up' || motion === 'step_calf_raise') e.step = true;
+  if (motion === 'wall_sit' || motion === 'wall_pushup') e.wall = true;
+  if (motion === 'pull_up') e.pullupBar = true;
+  if (motion === 'jump_rope') e.jumpRope = true;
+
+  if (motion && DEFAULT_DB_MOTIONS.includes(motion) && !e.barbell && !e.kettlebell && !e.band && !e.straps) {
+    e.dumbbells = true;
+  }
+
+  // Κανονικοποίηση e.band → { anchor }
+  if (e.band) {
+    const anchor = typeof e.band === 'object' && e.band.anchor
+      ? e.band.anchor
+      : (typeof e.band === 'string' ? e.band : resolveBandAnchor(ex, motion));
+    e.band = { anchor };
+  }
+
+  // Επίλυση συγκρούσεων εξοπλισμού χεριών
   if (e.kettlebell) delete e.dumbbells;
   if (e.barbell) { delete e.dumbbells; delete e.kettlebell; }
-  if (e.straps) { delete e.dumbbells; delete e.kettlebell; delete e.barbell; }
-  if (motion && FLOOR_MOTIONS.includes(motion)) e.mat = true;
+  if (e.straps) { delete e.dumbbells; delete e.kettlebell; delete e.barbell; delete e.band; }
+  if (e.band && motion && BAND_MOTIONS[motion]) { delete e.dumbbells; delete e.kettlebell; delete e.barbell; }
+  if (e.singleDumbbell) { delete e.dumbbells; delete e.kettlebell; delete e.barbell; }
+
+  // Αποφυγή παραδόξων στρώματος: οι ασκήσεις εδάφους παίρνουν πάντα στρώμα,
+  // ενώ οι όρθιες / με πάγκο / τοίχο / μονόζυγο / σκαλί ΔΕΝ εμφανίζουν στρώμα.
+  if (motion && FLOOR_MOTIONS.includes(motion)) {
+    e.mat = true;
+  } else if (motion && motion !== 'generic' && motion !== 'burpee') {
+    delete e.mat;
+  }
+
   if (motion && NO_HAND_WEIGHTS.includes(motion)) {
-    delete e.dumbbells; delete e.kettlebell; delete e.barbell;
+    delete e.dumbbells; delete e.singleDumbbell; delete e.kettlebell; delete e.barbell;
   }
   return e;
 }
@@ -62,7 +136,7 @@ const M = {
   chrome:  () => new THREE.MeshStandardMaterial({ color: 0xe2e6ec, roughness: 0.16, metalness: 1.0 }),
   knurl:   () => new THREE.MeshStandardMaterial({ color: 0x9aa2ac, roughness: 0.44, metalness: 0.96 }),
   iron:    () => new THREE.MeshStandardMaterial({ color: 0x262930, roughness: 0.52, metalness: 0.65 }),
-  latex:   c  => new THREE.MeshStandardMaterial({ color: c, roughness: 0.38, metalness: 0.02, side: THREE.DoubleSide }),
+  latex:   c  => new THREE.MeshStandardMaterial({ color: c, roughness: 0.36, metalness: 0.04, side: THREE.DoubleSide }),
   strap:   () => new THREE.MeshStandardMaterial({ color: 0x181a1f, roughness: 0.88, metalness: 0.04 }),
   handle:  () => new THREE.MeshStandardMaterial({ color: 0xf4c430, roughness: 0.55, metalness: 0.06 }),
   mat:     () => new THREE.MeshStandardMaterial({ color: 0x4f4678, roughness: 0.92, metalness: 0.0 }),
@@ -71,6 +145,8 @@ const M = {
   stepTop: () => new THREE.MeshStandardMaterial({ color: 0x22262e, roughness: 0.85, metalness: 0.04 }),
   stepBox: () => new THREE.MeshStandardMaterial({ color: 0x3b4252, roughness: 0.72, metalness: 0.10 }),
   wall:    () => new THREE.MeshStandardMaterial({ color: 0xd6dce6, roughness: 0.90, metalness: 0.0, envMapIntensity: 0.45 }),
+  wood:    () => new THREE.MeshStandardMaterial({ color: 0xb08a65, roughness: 0.68, metalness: 0.04 }),
+  rope:    () => new THREE.MeshStandardMaterial({ color: 0x0ea5e9, roughness: 0.42, metalness: 0.08 }),
 };
 
 const shadow = o => {
@@ -145,7 +221,6 @@ function barbell() {
     stop.rotation.z = Math.PI / 2;
     stop.position.x = s * 0.61;
     g.add(stop);
-    // Ολυμπιακοί bumper δίσκοι (ακτίνα 0.225m)
     const plates = [[0.65, BARBELL_PLATE_R, 0.042, 0x2563eb], [0.70, 0.175, 0.032, 0xeab308]];
     for (const [x, r, w, ringCol] of plates) {
       const p = new THREE.Mesh(new THREE.CylinderGeometry(r, r, w, 32), M.rubber());
@@ -166,7 +241,6 @@ function barbell() {
     collar.position.x = s * 0.745;
     g.add(collar);
   }
-  // Αφρώδες μαξιλαράκι για hip thrust (φαίνεται μόνο σε hip_thrust)
   const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.038, 0.36, 18), M.leather());
   pad.rotation.z = Math.PI / 2;
   pad.visible = false;
@@ -177,12 +251,12 @@ function barbell() {
 }
 
 /**
- * Δυναμικό καμπύλο λάστιχο αντίστασης (quadratic Bezier tube mesh).
+ * Δυναμικό καμπύλο λάστιχο αντίστασης / σχοινάκι (quadratic Bezier tube mesh).
  * Ενημερώνει τα buffers in-place χωρίς δεσμεύσεις μνήμης ανά καρέ, με ελαφριά
  * λέπτυνση κατά την επιμήκυνση (φαινόμενο Poisson).
  */
 class CurvedBand {
-  constructor(mat, segs = 16, radial = 8, baseRadius = 0.011, restLen = 0.75) {
+  constructor(mat, segs = 18, radial = 8, baseRadius = 0.011, restLen = 0.75) {
     this.segs = segs;
     this.radial = radial;
     this.baseRadius = baseRadius;
@@ -256,6 +330,7 @@ class CurvedBand {
     }
     pos.needsUpdate = true;
     nrm.needsUpdate = true;
+    return stretch;
   }
 }
 
@@ -266,19 +341,116 @@ function webbing(width, thickness, mat) {
   return m;
 }
 
-/** Στιβαρός πάγκος / καρέκλα γυμναστικής (ύψος 0.45m) για triceps dip & hip thrust */
-function benchProp() {
+/** Κατακόρυφος στύλος / δοκός αγκύρωσης λάστιχου (wall bar / door-anchor frame) με κινητό κρίκο D-ring */
+function bandAnchorProp() {
+  const g = new THREE.Group();
+  const steel = M.steel(), rubber = M.rubber(), strap = M.strap(), chrome = M.chrome();
+
+  // Στιβαρή βάση δαπέδου
+  const base = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.024, 0.28), rubber);
+  base.position.y = 0.012;
+  g.add(base);
+
+  // Κατακόρυφη ατσάλινη κολόνα 2.35m με ενδείξεις ύψους (οριζόντιες ράβδοι wall-bar)
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.028, 2.35, 16), steel);
+  post.position.y = 1.18;
+  g.add(post);
+
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.025, 16), rubber);
+  cap.position.y = 2.36;
+  g.add(cap);
+
+  for (const h of [0.30, 0.75, 1.18, 1.62, 2.05]) {
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.031, 0.005, 8, 18), chrome);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = h;
+    g.add(ring);
+  }
+
+  // Κινητή θηλιά αγκύρωσης (anchor cuff + D-ring) που τοποθετείται στο ακριβές ύψος της άσκησης
+  const cuff = new THREE.Group();
+  const wrap = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.034, 0.055, 16), strap);
+  cuff.add(wrap);
+  const dring = new THREE.Mesh(new THREE.TorusGeometry(0.024, 0.0055, 8, 18), chrome);
+  dring.position.z = -0.044;
+  cuff.add(dring);
+  g.add(cuff);
+  g.userData.cuff = cuff;
+
+  return shadow(g);
+}
+
+/** Λαβή λάστιχου (αφρώδης λαβή + κρίκος) */
+function bandHandleProp() {
+  const hg = new THREE.Group();
+  const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.125, 12), M.rubber());
+  hg.add(grip);
+  for (const s of [-0.065, 0.065]) {
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.017, 0.017, 0.010, 10), M.accent(0xe63946));
+    cap.position.y = s;
+    hg.add(cap);
+  }
+  return shadow(hg);
+}
+
+/** Μονόζυγο πόρτας (doorway pull-up frame με δύο κάθετους ορθοστάτες & οριζόντια μπάρα στα 2.18m) */
+function pullupBarProp() {
+  const g = new THREE.Group();
+  const wood = M.wood(), steel = M.steel(), chrome = M.chrome(), rubber = M.rubber();
+  const frameH = 2.38;
+  const halfW = 0.56;
+  const barY = 2.18;
+
+  // Πλαίσιο πόρτας
+  for (const s of [-1, 1]) {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.085, frameH, 0.11), wood);
+    post.position.set(s * (halfW + 0.042), frameH * 0.5, 0);
+    g.add(post);
+    const mount = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.024, 14), steel);
+    mount.rotation.z = Math.PI / 2;
+    mount.position.set(s * (halfW - 0.005), barY, 0);
+    g.add(mount);
+  }
+  const lintel = new THREE.Mesh(new THREE.BoxGeometry(halfW * 2 + 0.17, 0.095, 0.12), wood);
+  lintel.position.set(0, frameH + 0.045, 0);
+  g.add(lintel);
+
+  // Οριζόντια ατσάλινη μπάρα + αντιολισθητικές λαβές αφρού
+  const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.017, 0.017, halfW * 2, 18), chrome);
+  bar.rotation.z = Math.PI / 2;
+  bar.position.set(0, barY, 0);
+  g.add(bar);
+
+  for (const s of [-1, 1]) {
+    const foam = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.24, 14), rubber);
+    foam.rotation.z = Math.PI / 2;
+    foam.position.set(s * 0.29, barY, 0);
+    g.add(foam);
+  }
+  return shadow(g);
+}
+
+/** Στιβαρός πάγκος / καρέκλα γυμναστικής (ύψος 0.45m). Υποστηρίζει 'seat' (καρέκλα/κουτί) & 'flat' (μακρύς πάγκος βαρών). */
+function benchProp(style = 'seat') {
   const g = new THREE.Group();
   const steel = M.steel(), leather = M.leather(), rubber = M.rubber();
   const topH = 0.45;
-  const pad = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.065, 0.44), leather);
+  const isFlat = style === 'flat';
+  const w = isFlat ? 0.34 : 0.58;
+  const d = isFlat ? 1.18 : 0.44;
+
+  const pad = new THREE.Mesh(new THREE.BoxGeometry(w, 0.065, d), leather);
   pad.position.set(0, topH - 0.0325, 0);
   g.add(pad);
-  const frame = new THREE.Mesh(new THREE.BoxGeometry(0.50, 0.032, 0.36), steel);
+
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(w - 0.08, 0.032, d - 0.08), steel);
   frame.position.set(0, topH - 0.08, 0);
   g.add(frame);
-  for (const sx of [-0.23, 0.23]) {
-    for (const sz of [-0.16, 0.16]) {
+
+  const lx = isFlat ? (w * 0.38) : 0.23;
+  const lz = isFlat ? (d * 0.40) : 0.16;
+  for (const sx of [-lx, lx]) {
+    for (const sz of [-lz, lz]) {
       const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.017, 0.017, topH - 0.08, 12), steel);
       leg.position.set(sx, (topH - 0.08) * 0.5, sz);
       g.add(leg);
@@ -290,7 +462,7 @@ function benchProp() {
   return shadow(g);
 }
 
-/** Κουτί plyo step-up (ύψος 0.34m) με αντιολισθητική επιφάνεια */
+/** Κουτί plyo step-up / σκαλί γάμπας (ύψος 0.34m) με αντιολισθητική επιφάνεια */
 function stepBoxProp() {
   const g = new THREE.Group();
   const h = 0.34;
@@ -306,7 +478,7 @@ function stepBoxProp() {
   return shadow(g);
 }
 
-/** Καθαρό αρχιτεκτονικό πάνελ τοίχου για wall sit */
+/** Καθαρό αρχιτεκτονικό πάνελ τοίχου για wall sit & wall push-up */
 function wallPanelProp() {
   const g = new THREE.Group();
   const panel = new THREE.Mesh(new THREE.BoxGeometry(1.55, 2.25, 0.08), M.wall());
@@ -318,6 +490,17 @@ function wallPanelProp() {
   return shadow(g);
 }
 
+/** Λαβή σχοινακιού */
+function ropeHandleProp() {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.016, 0.135, 12), M.rubber());
+  g.add(body);
+  const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.014, 0.020, 12), M.accent(0x0ea5e9));
+  tip.position.y = 0.075;
+  g.add(tip);
+  return shadow(g);
+}
+
 // Ανεξάρτητα scratch διανύσματα (χωρίς aliasing μεταξύ συναρτήσεων)
 const _tmpD = new THREE.Vector3();
 const _tmpU = new THREE.Vector3(0, 1, 0);
@@ -325,9 +508,11 @@ const _tmpX = new THREE.Vector3(1, 0, 0);
 const _tmpV1 = new THREE.Vector3();
 const _tmpV2 = new THREE.Vector3();
 const _tmpV3 = new THREE.Vector3();
+const _tmpV4 = new THREE.Vector3();
 const _junc = new THREE.Vector3();
 const _ctrl = new THREE.Vector3();
 const _tmpQ = new THREE.Quaternion();
+const _tmpQ2 = new THREE.Quaternion();
 
 function stretchSegment(m, a, b) {
   _tmpD.subVectors(b, a);
@@ -374,17 +559,24 @@ export class Equipment {
     this.o = {};
 
     if (this.e.dumbbells && !this.e.goblet) this.o.db = [add(dumbbell()), add(dumbbell())];
+    if (this.e.singleDumbbell) this.o.singleDb = add(dumbbell());
     if (this.e.dumbbells && this.e.goblet) this.o.goblet = add(dumbbell());
     if (this.e.kettlebell) this.o.kb = add(kettlebell());
     if (this.e.barbell) this.o.bar = add(barbell());
     if (this.e.band) {
       const lMat = M.latex(0xe63946);
-      this.o.bandL = new CurvedBand(lMat, 16, 8, 0.010, 0.80);
-      this.o.bandR = new CurvedBand(lMat, 16, 8, 0.010, 0.80);
+      this.o.bandMat = lMat;
+      this.o.bandL = new CurvedBand(lMat, 18, 8, 0.010, 0.85);
+      this.o.bandR = new CurvedBand(lMat, 18, 8, 0.010, 0.85);
       this.o.bandH = new CurvedBand(lMat, 18, 8, 0.010, 0.55);
       add(this.o.bandL.mesh);
       add(this.o.bandR.mesh);
       add(this.o.bandH.mesh);
+      this.o.bandPole = add(bandAnchorProp());
+      this.o.bandHandles = [add(bandHandleProp()), add(bandHandleProp())];
+      this.o.bandPole.visible = false;
+      this.o.bandHandles[0].visible = false;
+      this.o.bandHandles[1].visible = false;
     }
     if (this.e.straps) {
       const st = M.strap(), hd = M.handle(), ch = M.chrome();
@@ -405,12 +597,18 @@ export class Equipment {
       this.o.anchor = add(new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.045, 0.09), M.iron()));
       this.o.junction = add(new THREE.Mesh(new THREE.TorusGeometry(0.022, 0.006, 8, 16), ch));
     }
+    if (this.e.jumpRope) {
+      this.o.rope = new CurvedBand(M.rope(), 26, 6, 0.0055, 2.4);
+      add(this.o.rope.mesh);
+      this.o.ropeHandles = [add(ropeHandleProp()), add(ropeHandleProp())];
+    }
+    if (this.e.pullupBar) this.o.pullupBar = add(pullupBarProp());
     if (this.e.mat) {
       const mat = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.008, 1.96), M.mat());
       mat.receiveShadow = true;
       this.o.mat = add(mat);
     }
-    if (this.e.bench) this.o.bench = add(benchProp());
+    if (this.e.bench) this.o.bench = add(benchProp(this.e.benchStyle || 'seat'));
     if (this.e.step) this.o.step = add(stepBoxProp());
     if (this.e.wall) this.o.wall = add(wallPanelProp());
   }
@@ -418,24 +616,25 @@ export class Equipment {
   /** Ποσό «κλεισίματος» δαχτύλων ανά χέρι */
   grip() {
     const e = this.e;
-    return e.dumbbells || e.kettlebell || e.barbell || e.band || e.straps ? 1 : 0.25;
+    return e.dumbbells || e.singleDumbbell || e.kettlebell || e.barbell || e.band || e.straps || e.pullupBar || e.jumpRope ? 1 : 0.25;
   }
 
   /** Προτεινόμενο στυλ λαβής δαχτύλων */
   gripStyle() {
     const e = this.e;
-    if (e.barbell) return 'bar';
-    if (e.dumbbells) return 'dumbbell';
+    if (e.barbell || e.pullupBar) return 'bar';
+    if (e.dumbbells || e.singleDumbbell) return 'dumbbell';
     if (e.kettlebell) return 'kettlebell';
     if (e.straps) return 'trx';
-    if (e.band) return 'bar';
+    if (e.band || e.jumpRope) return 'bar';
     return null;
   }
 
   /**
    * Ενημερώνει θέσεις & προσανατολισμούς εξοπλισμού σε world space.
    * h: { L:{pos,across}, R:{pos,across}, feet:{L,R}, figure, yaw, matZ,
-   *      barPos?, barAxis?, barPad?, bandMode?, trxAnchor?, benchZ?, stepZ?, wallZ? }
+   *      barPos?, barAxis?, barPad?, bandAnchor?, bandAnchorPos?, bandSingleHandle?,
+   *      trxAnchor?, benchZ?, benchX?, stepZ?, wallZ?, pullupZ?, ropeAngle? }
    */
   update(h) {
     const o = this.o;
@@ -447,6 +646,13 @@ export class Equipment {
         d.position.copy(s.pos);
         alignX(d, s.across);
       });
+    }
+
+    if (o.singleDb) {
+      const sideKey = this.e.singleDumbbell === 'L' ? 'L' : 'R';
+      const s = h[sideKey];
+      o.singleDb.position.copy(s.pos);
+      alignX(o.singleDb, s.across);
     }
 
     const mid = _tmpV2.copy(h.L.pos).add(h.R.pos).multiplyScalar(0.5);
@@ -477,27 +683,103 @@ export class Equipment {
       if (o.bar.userData.pad) o.bar.userData.pad.visible = !!h.barPad;
     }
 
+    // ---- ΣΥΣΤΗΜΑ ΑΓΚΥΡΩΣΗΣ ΛΑΣΤΙΧΩΝ (feet | hands | front_chest | front_high | front_low | behind_chest | side_waist | side_high) ----
     if (o.bandH) {
-      if (h.bandMode === 'pull_apart') {
+      const anchorKind = h.bandAnchor || (typeof this.e.band === 'object' ? this.e.band.anchor : null) || (h.bandMode === 'pull_apart' ? 'hands' : 'feet');
+      if (anchorKind === 'hands') {
         o.bandL.mesh.visible = false;
         o.bandR.mesh.visible = false;
         o.bandH.mesh.visible = true;
+        o.bandPole.visible = false;
+        o.bandHandles[0].visible = false;
+        o.bandHandles[1].visible = false;
         const dist = h.L.pos.distanceTo(h.R.pos);
-        const slack = Math.max(0.012, 0.10 - dist * 0.065);
+        const slack = Math.max(0.010, 0.10 - dist * 0.068);
         const fwd = _tmpV1.set(0, -slack * 0.32, slack).applyQuaternion(yawQ);
         _ctrl.copy(mid).add(fwd);
         o.bandH.update(h.L.pos, _ctrl, h.R.pos);
-      } else {
+      } else if (anchorKind === 'feet') {
         o.bandH.mesh.visible = false;
         o.bandL.mesh.visible = true;
         o.bandR.mesh.visible = true;
-        const sideL = _tmpV1.set(0.04, 0, 0.03).applyQuaternion(yawQ);
+        o.bandPole.visible = false;
+        o.bandHandles[0].visible = false;
+        o.bandHandles[1].visible = false;
+        const sideL = _tmpV1.set(0.09, 0, 0.06).applyQuaternion(yawQ);
         _ctrl.copy(h.feet.L).lerp(h.L.pos, 0.5).add(sideL);
         o.bandL.update(h.feet.L, _ctrl, h.L.pos);
 
-        const sideR = _tmpV1.set(-0.04, 0, 0.03).applyQuaternion(yawQ);
+        const sideR = _tmpV1.set(-0.09, 0, 0.06).applyQuaternion(yawQ);
         _ctrl.copy(h.feet.R).lerp(h.R.pos, 0.5).add(sideR);
         o.bandR.update(h.feet.R, _ctrl, h.R.pos);
+      } else {
+        // Σταθερή αγκύρωση σε στύλο/πόρτα: ορατός στύλος, κινητός κρίκος, τεντωμένο καμπύλο λάστιχο & λαβές
+        const defaultAnchors = {
+          front_chest:  [0.0,  1.18,  1.28],
+          front_high:   [0.0,  1.92,  1.18],
+          front_low:    [0.0,  0.28,  1.28],
+          behind_chest: [0.0,  1.18, -1.16],
+          side_waist:   [1.18, 1.08,  0.08],
+          side_high:    [1.12, 1.98,  0.14],
+        };
+        const def = defaultAnchors[anchorKind] || defaultAnchors.front_chest;
+        const aLocal = h.bandAnchorPos || _tmpV4.set(def[0], def[1], def[2]);
+        const poleBase = _tmpV1.set(aLocal.x, 0, aLocal.z).applyQuaternion(yawQ);
+        const anchorW = _junc.set(aLocal.x, aLocal.y, aLocal.z).applyQuaternion(yawQ);
+
+        o.bandPole.visible = true;
+        o.bandPole.position.copy(poleBase);
+        // Προσανατολισμός κρίκου D-ring προς τον coach
+        const toCoachAngle = Math.atan2(-aLocal.x, -aLocal.z);
+        o.bandPole.quaternion.copy(yawQ).multiply(_tmpQ2.setFromAxisAngle(_tmpU, toCoachAngle + Math.PI));
+        if (o.bandPole.userData.cuff) o.bandPole.userData.cuff.position.y = aLocal.y;
+
+        // Υπολογισμός τάσης & καμπυλότητας (όσο μεγαλύτερη η έλξη, τόσο μειώνεται η κοιλιά του λάστιχου!)
+        const updateStrand = (bandObj, handPos, lateralOff) => {
+          const dist = anchorW.distanceTo(handPos);
+          const sag = Math.max(0.008, Math.min(0.14, 0.15 - (dist - 0.55) * 0.13));
+          _ctrl.copy(anchorW).lerp(handPos, 0.5);
+          _ctrl.y -= sag;
+          if (lateralOff) {
+            _tmpV1.set(lateralOff, 0, 0).applyQuaternion(yawQ);
+            _ctrl.add(_tmpV1);
+          }
+          return bandObj.update(anchorW, _ctrl, handPos);
+        };
+
+        o.bandH.mesh.visible = false;
+        let maxStretch = 1.0;
+        if (h.bandSingleHandle) {
+          // Pallof press / Woodchop: ενιαία διπλή έλξη προς τις ενωμένες παλάμες
+          o.bandL.mesh.visible = true;
+          o.bandR.mesh.visible = false;
+          maxStretch = updateStrand(o.bandL, mid, 0);
+          o.bandHandles[0].visible = true;
+          o.bandHandles[1].visible = false;
+          o.bandHandles[0].position.copy(mid);
+          o.bandHandles[0].quaternion.copy(yawQ);
+        } else {
+          o.bandL.mesh.visible = true;
+          o.bandR.mesh.visible = true;
+          // Στο behind_chest (πιέσεις στήθους με άγκυρα πίσω) τα δύο σκέλη ανοίγουν εξωτερικά γύρω από τα πλευρά/μασχάλες!
+          const latBow = anchorKind === 'behind_chest' ? 0.30 : 0.015;
+          const sL = updateStrand(o.bandL, h.L.pos, latBow);
+          const sR = updateStrand(o.bandR, h.R.pos, -latBow);
+          maxStretch = Math.max(sL, sR);
+          [h.L, h.R].forEach((s, i) => {
+            o.bandHandles[i].visible = true;
+            o.bandHandles[i].position.copy(s.pos);
+            _tmpV1.copy(s.across);
+            if (_tmpV1.lengthSq() < 1e-5) _tmpV1.set(1, 0, 0).applyQuaternion(yawQ);
+            else _tmpV1.normalize();
+            o.bandHandles[i].quaternion.setFromUnitVectors(_tmpU, _tmpV1);
+          });
+        }
+        // Απαλή οπτική ένδειξη αυξημένης τάσης στο υλικό του λάστιχου
+        if (o.bandMat) {
+          const t01 = Math.max(0, Math.min(1, (maxStretch - 1.0) / 0.85));
+          o.bandMat.color.setRGB(0.90 + t01 * 0.08, 0.22 - t01 * 0.07, 0.27 - t01 * 0.07);
+        }
       }
     }
 
@@ -522,6 +804,27 @@ export class Equipment {
       });
     }
 
+    // ---- ΣΧΟΙΝΑΚΙ (δυναμικό τόξο συγχρονισμένο με τη φάση του άλματος — σε Quadratic Bezier, ctrl.y = 2*yMin - yHands!) ----
+    if (o.rope) {
+      [h.L, h.R].forEach((s, i) => {
+        o.ropeHandles[i].position.copy(s.pos);
+        const outDir = _tmpV1.set(i ? -1 : 1, -0.25, 0.25).applyQuaternion(yawQ).normalize();
+        o.ropeHandles[i].quaternion.setFromUnitVectors(_tmpU, outDir);
+      });
+      const ang = h.ropeAngle ?? 0; // 0 = ψηλά πάνω από το κεφάλι, π = ακριβώς κάτω από τα πέλματα (y≈0.02m)!
+      const handY = mid.y;
+      const apexY = 0.98 + Math.cos(ang) * 0.96; // 1.94m ψηλά ↔ 0.02m κάτω από τα πέλματα!
+      const ctrlY = 2 * apexY - handY;
+      const cz = Math.sin(ang) * 0.55;
+      _ctrl.set(0, ctrlY, cz).applyQuaternion(yawQ);
+      o.rope.update(h.L.pos, _ctrl, h.R.pos);
+    }
+
+    if (o.pullupBar) {
+      o.pullupBar.quaternion.copy(yawQ);
+      o.pullupBar.position.set(0, 0, h.pullupZ ?? 0.04).applyQuaternion(yawQ).setY(0);
+    }
+
     if (o.mat) {
       o.mat.quaternion.copy(yawQ);
       o.mat.position.set(0, 0, h.matZ || 0).applyQuaternion(yawQ).setY(0.004);
@@ -529,7 +832,7 @@ export class Equipment {
 
     if (o.bench) {
       o.bench.quaternion.copy(yawQ);
-      o.bench.position.set(0, 0, h.benchZ ?? -0.40).applyQuaternion(yawQ).setY(0);
+      o.bench.position.set(h.benchX ?? 0, 0, h.benchZ ?? -0.40).applyQuaternion(yawQ).setY(0);
     }
 
     if (o.step) {
@@ -538,8 +841,11 @@ export class Equipment {
     }
 
     if (o.wall) {
+      const wz = h.wallZ ?? -0.22;
+      // Όταν ο τοίχος είναι μπροστά (wz > 0, π.χ. wall push-up), περιστρέφεται 180° ώστε η όψη επαφής να είναι ακριβώς στο wz
       o.wall.quaternion.copy(yawQ);
-      o.wall.position.set(0, 0, h.wallZ ?? -0.22).applyQuaternion(yawQ).setY(0);
+      if (wz > 0) o.wall.quaternion.multiply(_tmpQ2.setFromAxisAngle(_tmpU, Math.PI));
+      o.wall.position.set(0, 0, wz).applyQuaternion(yawQ).setY(0);
     }
   }
 
