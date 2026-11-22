@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="el">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GymTrAIner — Μετατροπή κινήσεων Mixamo</title>
+<style>
+  body{font:15px system-ui,sans-serif;margin:0;background:#f4f6fb;color:#0f172a}
+  main{max-width:860px;margin:0 auto;padding:20px}
+  .card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:14px}
+  label{display:block;margin:8px 0 4px;font-weight:600}
+  input,select,button{font:inherit;padding:6px 10px}
+  table{border-collapse:collapse;width:100%;font-size:.9rem} td,th{border-bottom:1px solid #e2e8f0;padding:6px;text-align:left}
+  code{background:#eef2f7;padding:1px 5px;border-radius:5px}
+</style>
+<script type="importmap">{ "imports": { "three": "../js/vendor/three.module.min.js" } }</script>
+</head>
+<body><main>
+<h1>🎬 Μετατροπή κινήσεων Mixamo → GymTrAIner</h1>
+<div class="card">
+  <ol>
+    <li>Στο mixamo.com διάλεξε κίνηση → Download → <b>FBX Binary</b>, 30 fps (with ή without skin, όπως θέλεις).</li>
+    <li>Διάλεξε εδώ το αρχείο, την κίνηση της εφαρμογής που αντικαθιστά και πώς ξεκινά μια επανάληψη.</li>
+    <li>Κατέβασε το <code>.json</code> και βάλ' το στο <code>assets/anim/</code>, και πρόσθεσε μια γραμμή στο <code>data/motion-clips.json</code>.</li>
+  </ol>
+  <label>Αρχείο FBX</label><input type="file" id="file" accept=".fbx">
+  <label>Κίνηση εφαρμογής (κλειδί)</label><input id="key" placeholder="π.χ. squat, pushup, crunch">
+  <label>Μια επανάληψη ξεκινά όταν…</label>
+  <select id="mode">
+    <option value="hipsHigh">η λεκάνη είναι ψηλά (καθίσματα, κάμψεις, άλματα)</option>
+    <option value="headLow">το κεφάλι είναι χαμηλά (κοιλιακοί/sit-ups ξαπλωμένος)</option>
+    <option value="headHigh">το κεφάλι είναι ψηλά</option>
+  </select>
+  <p><button id="go">Μετατροπή</button></p>
+  <div id="out"></div>
+</div>
+</main>
+<script type="module">
+import * as THREE from 'three';
+import { FBXLoader } from '../js/vendor/jsm/loaders/FBXLoader.js';
+
+const FPS = 30;
+const norm = n => n.replace(/^mixamorig\d*[:_]?/i, '');
+
+/** Μετατρέπει ArrayBuffer FBX σε «ανεξάρτητη από χαρακτήρα» κίνηση:
+ *  για κάθε οστό, περιστροφή σε world space ΣΧΕΤΙΚΑ με το T-pose (D = W(t)·W_rest⁻¹)
+ *  και θέση λεκάνης κανονικοποιημένη με το ύψος λεκάνης. Έτσι παίζει σε οποιοδήποτε μοντέλο Mixamo. */
+export async function convert(buf, { key, mode = 'hipsHigh', name = 'clip' } = {}) {
+  const obj = new FBXLoader().parse(buf, '');
+  const clip = obj.animations[0];
+  if (!clip) throw new Error('Το FBX δεν έχει κίνηση');
+  const bones = [], seen = new Set();
+  obj.traverse(o => { if (o.isBone && !seen.has(norm(o.name))) { seen.add(norm(o.name)); bones.push(o); } }); // χωρίς διπλότυπα σκελετών
+  if (!bones.find(b => norm(b.name) === 'Hips')) throw new Error('Δεν βρέθηκε σκελετός Mixamo');
+  obj.updateMatrixWorld(true);
+  const rest = bones.map(b => b.getWorldQuaternion(new THREE.Quaternion()));
+  const hips = bones.find(b => norm(b.name) === 'Hips');
+  const restHips = hips.getWorldPosition(new THREE.Vector3());
+  const foot = bones.find(b => norm(b.name) === 'LeftToeBase') || bones.find(b => norm(b.name) === 'LeftFoot');
+  const floorY = foot.getWorldPosition(new THREE.Vector3()).y;
+  const hipsH = restHips.y - floorY;
+
+  const mixer = new THREE.AnimationMixer(obj); mixer.clipAction(clip).play();
+  const n = Math.max(2, Math.round(clip.duration * FPS) + 1);
+  const q = [], hp = [], sig = [];
+  const head = bones.find(b => norm(b.name) === 'Head');
+  const wq = new THREE.Quaternion(), wv = new THREE.Vector3();
+  for (let f = 0; f < n; f++) {
+    mixer.setTime(Math.min(f / FPS, clip.duration)); obj.updateMatrixWorld(true);
+    bones.forEach((b, i) => {
+      b.getWorldQuaternion(wq).multiply(rest[i].clone().invert());
+      q.push(+wq.x.toFixed(4), +wq.y.toFixed(4), +wq.z.toFixed(4), +wq.w.toFixed(4));
+    });
+    hips.getWorldPosition(wv);
+    hp.push(+((wv.x - restHips.x) / hipsH).toFixed(4), +((wv.y - floorY) / hipsH).toFixed(4), +((wv.z - restHips.z) / hipsH).toFixed(4));
+    sig.push(mode === 'hipsHigh' ? wv.y : head.getWorldPosition(new THREE.Vector3()).y);
+  }
+
+  // Οι κινήσεις Mixamo είναι μία επανάληψη σε loop. Η επανάληψη της εφαρμογής ξεκινά από τη «θέση εκκίνησης»
+  // (π.χ. όρθια στα καθίσματα, πάνω θέση στις κάμψεις, ξαπλωμένη στους κοιλιακούς) και διαρκεί έναν πλήρη κύκλο.
+  const want = mode === 'headLow' ? -1 : 1;
+  const s = sig.map(v => want * v), hi = Math.max(...s), lo = Math.min(...s);
+  const start = s.findIndex(v => v >= hi - (hi - lo) * 0.02);
+  const isLoop = Math.abs(s[0] - s[n - 1]) < (hi - lo) * 0.08;
+  const period = isLoop ? clip.duration : clip.duration - start / FPS;
+  const peaks = [start];
+  return {
+    format: 'gymtrainer-clip@1', name, key, fps: FPS, frames: n,
+    bones: bones.map(b => norm(b.name)), q, hips: hp,
+    repStart: +(start / FPS).toFixed(3), period: +period.toFixed(3), loop: isLoop, duration: +clip.duration.toFixed(3),
+    peaks: peaks.map(p => +(p / FPS).toFixed(2)),
+  };
+}
+window.convert = async (url, opts) => convert(await (await fetch(url)).arrayBuffer(), opts);
+
+document.getElementById('go').onclick = async () => {
+  const f = document.getElementById('file').files[0], out = document.getElementById('out');
+  if (!f) return;
+  out.textContent = '⏳ Μετατροπή…';
+  try {
+    const key = document.getElementById('key').value.trim() || 'generic';
+    const res = await convert(await f.arrayBuffer(), { key, mode: document.getElementById('mode').value, name: f.name.replace(/\.fbx$/i, '') });
+    const file = res.name.toLowerCase().replace(/[^a-z0-9]+/g, '_') + '.json';
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(res)], { type: 'application/json' })); a.download = file; a.textContent = '⬇ ' + file;
+    out.innerHTML = `<p>Διάρκεια ${res.duration}s · επανάληψη από ${res.repStart}s, διάρκεια ${res.period}s · ${res.bones.length} οστά</p><p>Γραμμή για το data/motion-clips.json:<br><code>"${key}": { "src": "assets/anim/${file}" }</code></p>`;
+    out.prepend(a);
+  } catch (e) { out.textContent = '❌ ' + e.message; }
+};
+</script>
+</body></html>

@@ -613,7 +613,7 @@ export class SkinnedCoach {
       this.offY += (want - this.offY) * (1 - Math.exp(-dt * 18));
     }
 
-    this.hair?.update(dt);
+    if (!opts.skipHair) this.hair?.update(dt);
     return resolvedMeta;
   }
 }

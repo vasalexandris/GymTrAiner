@@ -1335,6 +1335,7 @@ import { GTAOPass } from './vendor/jsm/postprocessing/GTAOPass.js';
 import { OutputPass } from './vendor/jsm/postprocessing/OutputPass.js';
 import { MOTIONS, POSE_KEYS, mirror, sampleCycle } from './motions.js';
 import { loadCoachModel } from './skinned.js';
+import { getClip, applyClip } from './clips.js';
 import { Equipment, BARBELL_PLATE_R } from './equipment.js';
 import { clamp, lerp, smootherstep, clampPose, spineDistribution, applyAxialTwist, solveTwoBoneIK, basisFromDirSec } from './ik.js';
 
@@ -1801,6 +1802,20 @@ export class Avatar {
     this.motion = MOTIONS[this.motionKey];
     this.yawT = this.motion.yaw;
     this._syncEquipment();
+    // Κίνηση από motion capture (αν υπάρχει για αυτή την άσκηση) — αλλιώς η διαδικαστική
+    const k = this.motionKey;
+    this.clip = null; this.clipReady = getClip(k).then(c => { if (this.motionKey === k) this.clip = c; return c; });
+  }
+
+  /** 'clip' αν η τρέχουσα άσκηση παίζει από motion capture, αλλιώς 'procedural' */
+  get motionSource() { return this.clip && this.skinned && (this.clipW ?? 0) > 0.5 ? 'clip' : 'procedural'; }
+
+  /** Χρόνος μέσα στην κίνηση για την τρέχουσα φάση (κύκλος επανάληψης / στάση / έτοιμος) */
+  _clipTime() {
+    const c = this.clip;
+    if (this.mode === 'cycle') return c.repStart + Math.min(this.t / Math.max(this.dur, 0.01), 1) * c.period;
+    if (this._debugMode) return c.repStart + (this._debugU || 0) * c.period * 0.5;
+    return c.repStart;
   }
   setEquipment(e) {
     this.userEquip = { ...(e || {}) };
@@ -3102,8 +3117,17 @@ export class Avatar {
       const resolvedMeta = this.skinned.drive(T, hips, dt, {
         air: isJump ? Math.max(0, this.cur.lift * this.k) : 0,
         resolveIK: sk => this._resolveIK(sk, this.motion, this.cur, wp, ax, cy, cz),
+        skipHair: true,
       });
       if (resolvedMeta) meta = resolvedMeta;
+      // Motion capture πάνω από τη διαδικαστική πόζα, με ομαλή μετάβαση (idle → διαδικαστική στάση)
+      // Οι κινήσεις motion capture είναι χωρίς βάρη: με αντικείμενο στα χέρια μένει η διαδικαστική (σωστή λαβή)
+      const e = this.equip?.e || {};
+      const handsBusy = !!(e.dumbbells || e.kettlebell || e.barbell || e.band || e.straps || e.goblet || e.singleDumbbell || e.jumpRope || e.pullupBar);
+      const wantClip = this.clip && !handsBusy && this.mode !== 'idle' ? 1 : 0;
+      this.clipW = (this.clipW ?? 0) + (wantClip - (this.clipW ?? 0)) * Math.min(1, dt * 6);
+      if (this.clip && this.clipW > 0.001) applyClip(this.skinned, this.clip, this._clipTime(), this.yaw, this.clipW);
+      this.skinned.updateHair(dt);
     } else {
       const res = this._resolveIK(null, this.motion, this.cur, wp, ax, cy, cz);
       meta = res.meta;
@@ -3223,8 +3247,10 @@ export class Avatar {
   }
 
   /** Άμεση εφαρμογή πόζας (για δοκιμές / snapshots) */
-  debug(key, u, alt = false, equip) {
+  async debug(key, u, alt = false, equip) {
     this.setMotion(key);
+    await this.clipReady;
+    this._debugU = u; this._debugMode = true;
     if (equip) this.setEquipment(equip);
     this.yaw = this.yawT;
     this.mode = u === 0 ? 'ready' : 'hold';
@@ -3945,7 +3971,7 @@ export class SkinnedCoach {
       this.offY += (want - this.offY) * (1 - Math.exp(-dt * 18));
     }
 
-    this.hair?.update(dt);
+    if (!opts.skipHair) this.hair?.update(dt);
     return resolvedMeta;
   }
 }
@@ -5807,6 +5833,123 @@ export class HairController {
 
 ```
 
+## js/clips.js
+
+```javascript
+// Κινήσεις από motion capture (Mixamo κ.ά.) για τον ρεαλιστικό coach.
+// Μορφή αρχείου: tools/clip-converter.html → «gymtrainer-clip@1»: για κάθε οστό η περιστροφή σε world space
+// ΣΧΕΤΙΚΑ με το T-pose (D = W(t)·W_rest⁻¹) και η θέση της λεκάνης κανονικοποιημένη με το ύψος λεκάνης.
+// Στο μοντέλο: W_target(t) = R_yaw · D(t) · W_target_rest — δουλεύει σε κάθε μοντέλο με σκελετό τύπου Mixamo.
+import * as THREE from './vendor/three.module.min.js';
+
+let manifestP = null;
+const cache = new Map();
+
+/** data/motion-clips.json: { "squat": { "src": "assets/anim/air_squat.json" }, ... } */
+export function loadManifest() {
+  return (manifestP ||= fetch('data/motion-clips.json', { cache: 'no-cache' })
+    .then(r => (r.ok ? r.json() : {})).then(j => j.clips || {}).catch(() => ({})));
+}
+
+export async function getClip(key) {
+  const man = await loadManifest();
+  const entry = man[key];
+  if (!entry?.src) return null;
+  if (!cache.has(entry.src)) {
+    cache.set(entry.src, fetch(entry.src).then(r => (r.ok ? r.json() : null)).then(d => (d?.format === 'gymtrainer-clip@1' ? prepare(d, entry) : null)).catch(() => null));
+  }
+  return cache.get(entry.src);
+}
+
+function prepare(d, entry) {
+  const nb = d.bones.length;
+  return {
+    ...d, ...entry, nb,
+    q: Float32Array.from(d.q), hips: Float32Array.from(d.hips),
+    repStart: entry.repStart ?? d.repStart ?? 0,
+    period: entry.period ?? d.period ?? d.duration,
+    index: Object.fromEntries(d.bones.map((n, i) => [n, i])),
+  };
+}
+
+const _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion();
+
+/** Δειγματοληψία τη χρονική στιγμή t (κυκλικά): επιστρέφει {q(boneIndex,out), hips(out)} */
+function sampler(clip, t) {
+  const dur = clip.loop ? clip.duration : (clip.frames - 1) / clip.fps;
+  let tt = clip.loop ? ((t % dur) + dur) % dur : Math.min(Math.max(t, 0), dur);
+  const fpos = tt * clip.fps, f0 = Math.min(clip.frames - 1, Math.floor(fpos)), f1 = Math.min(clip.frames - 1, f0 + 1), a = fpos - f0;
+  return {
+    q(i, out) {
+      const o0 = (f0 * clip.nb + i) * 4, o1 = (f1 * clip.nb + i) * 4;
+      _qa.set(clip.q[o0], clip.q[o0 + 1], clip.q[o0 + 2], clip.q[o0 + 3]);
+      _qb.set(clip.q[o1], clip.q[o1 + 1], clip.q[o1 + 2], clip.q[o1 + 3]);
+      return out.slerpQuaternions(_qa, _qb, a);
+    },
+    hips(out) {
+      const o0 = f0 * 3, o1 = f1 * 3, h = clip.hips;
+      return out.set(h[o0] + (h[o1] - h[o0]) * a, h[o0 + 1] + (h[o1 + 1] - h[o0 + 1]) * a, h[o0 + 2] + (h[o1 + 2] - h[o0 + 2]) * a);
+    },
+  };
+}
+
+const _yaw = new THREE.Quaternion(), _D = new THREE.Quaternion(), _W = new THREE.Quaternion(), _P = new THREE.Quaternion(), _L = new THREE.Quaternion();
+const _v = new THREE.Vector3(), _Y = new THREE.Vector3(0, 1, 0);
+
+/**
+ * Εφαρμόζει την κίνηση στο SkinnedCoach με βάρος w (0..1) πάνω από την ήδη υπολογισμένη (διαδικαστική) πόζα.
+ * Τα οστά επεξεργάζονται από τη ρίζα προς τα άκρα, ώστε κάθε τοπική περιστροφή να υπολογίζεται
+ * πάνω στη ΝΕΑ world περιστροφή του γονέα.
+ */
+export function applyClip(sk, clip, t, yaw, w) {
+  if (!clip || w <= 0.001) return;
+  const S = sampler(clip, t);
+  _yaw.setFromAxisAngle(_Y, yaw);
+  const worldOf = new Map();
+  const visit = bone => {
+    const n = bone.name.replace(/^mixamorig\d*[:_]?/i, '');
+    const i = clip.index[n], rest = sk.rest[n];
+    if (i != null && rest) {
+      S.q(i, _D);
+      const Wt = _W.copy(_yaw).multiply(_D).multiply(rest.world).clone();
+      const pW = worldOf.get(bone.parent) || bone.parent.getWorldQuaternion(_P).clone();
+      _L.copy(pW).invert().multiply(Wt);
+      bone.quaternion.slerp(_L, w);
+      // world μετά το blending (για τα παιδιά)
+      worldOf.set(bone, pW.clone().multiply(bone.quaternion));
+      if (n === 'Hips') {
+        const H = rest.pos.y; // ύψος λεκάνης στο T-pose (πέλματα στο 0)
+        S.hips(_v);
+        const target = new THREE.Vector3(_v.x * H, _v.y * H, _v.z * H).applyQuaternion(_yaw);
+        const cur = bone.getWorldPosition(new THREE.Vector3());
+        cur.lerp(target, w);
+        bone.parent.updateMatrixWorld(true);
+        bone.parent.worldToLocal(cur);
+        bone.position.copy(cur);
+      }
+    } else if (worldOf.has(bone.parent)) {
+      worldOf.set(bone, worldOf.get(bone.parent).clone().multiply(bone.quaternion));
+    }
+    for (const c of bone.children) if (c.isBone) visit(c);
+  };
+  visit(sk.b.Hips);
+  sk.root.updateMatrixWorld(true);
+
+  // Επαφή με το έδαφος: το χαμηλότερο σημείο επαφής ακουμπά ακριβώς στο πάτωμα (ούτε βύθισμα ούτε αιώρηση)
+  const C = [['LeftToeBase', sk.dims.toeHeight], ['RightToeBase', sk.dims.toeHeight], ['LeftFoot', sk.dims.footHeight * 0.92], ['RightFoot', sk.dims.footHeight * 0.92],
+    ['LeftHand', 0.022], ['RightHand', 0.022], ['LeftLeg', 0.055], ['RightLeg', 0.055], ['Hips', 0.11], ['Spine2', 0.12], ['Head', 0.11]];
+  let minY = Infinity;
+  for (const [n, r] of C) if (sk.b[n]) minY = Math.min(minY, sk.worldPos(n, _v).y - r);
+  if (Number.isFinite(minY) && Math.abs(minY) > 1e-4) {
+    const hb = sk.b.Hips, wpos = hb.getWorldPosition(new THREE.Vector3());
+    wpos.y -= minY * w;
+    hb.parent.worldToLocal(wpos); hb.position.copy(wpos);
+    sk.root.updateMatrixWorld(true);
+  }
+}
+
+```
+
 ## gallery.html
 
 ```html
@@ -5874,11 +6017,127 @@ for (const it of slice) for (const u of [0, 1]) {
   lbl.innerHTML = `<b>${it.m}</b> · θέση ${u} · εξοπλισμός: ${Object.keys(it.eq).join(', ') || '—'}<br>${it.title.replace(/</g, '&lt;')}`;
   cell.append(view, lbl); g.append(cell);
   const a = new Avatar(view, 'real', { quality: 'normal', hair: q.get('hair') || undefined }); await a.loaded;
-  a.paused = true; cancelAnimationFrame(a.raf); a.debug(it.m, u, false, it.eq);
+  a.paused = true; cancelAnimationFrame(a.raf); await a.debug(it.m, u, false, it.eq);
+  lbl.innerHTML += ` · <i>${a.motionSource === 'clip' ? '🎥 motion capture' : 'χειροποίητη'}</i>`;
 }
 window.done = true;
 </script>
 </body>
 </html>
+
+```
+
+## tools/clip-converter.html
+
+```html
+<!doctype html>
+<html lang="el">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GymTrAIner — Μετατροπή κινήσεων Mixamo</title>
+<style>
+  body{font:15px system-ui,sans-serif;margin:0;background:#f4f6fb;color:#0f172a}
+  main{max-width:860px;margin:0 auto;padding:20px}
+  .card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:14px}
+  label{display:block;margin:8px 0 4px;font-weight:600}
+  input,select,button{font:inherit;padding:6px 10px}
+  table{border-collapse:collapse;width:100%;font-size:.9rem} td,th{border-bottom:1px solid #e2e8f0;padding:6px;text-align:left}
+  code{background:#eef2f7;padding:1px 5px;border-radius:5px}
+</style>
+<script type="importmap">{ "imports": { "three": "../js/vendor/three.module.min.js" } }</script>
+</head>
+<body><main>
+<h1>🎬 Μετατροπή κινήσεων Mixamo → GymTrAIner</h1>
+<div class="card">
+  <ol>
+    <li>Στο mixamo.com διάλεξε κίνηση → Download → <b>FBX Binary</b>, 30 fps (with ή without skin, όπως θέλεις).</li>
+    <li>Διάλεξε εδώ το αρχείο, την κίνηση της εφαρμογής που αντικαθιστά και πώς ξεκινά μια επανάληψη.</li>
+    <li>Κατέβασε το <code>.json</code> και βάλ' το στο <code>assets/anim/</code>, και πρόσθεσε μια γραμμή στο <code>data/motion-clips.json</code>.</li>
+  </ol>
+  <label>Αρχείο FBX</label><input type="file" id="file" accept=".fbx">
+  <label>Κίνηση εφαρμογής (κλειδί)</label><input id="key" placeholder="π.χ. squat, pushup, crunch">
+  <label>Μια επανάληψη ξεκινά όταν…</label>
+  <select id="mode">
+    <option value="hipsHigh">η λεκάνη είναι ψηλά (καθίσματα, κάμψεις, άλματα)</option>
+    <option value="headLow">το κεφάλι είναι χαμηλά (κοιλιακοί/sit-ups ξαπλωμένος)</option>
+    <option value="headHigh">το κεφάλι είναι ψηλά</option>
+  </select>
+  <p><button id="go">Μετατροπή</button></p>
+  <div id="out"></div>
+</div>
+</main>
+<script type="module">
+import * as THREE from 'three';
+import { FBXLoader } from '../js/vendor/jsm/loaders/FBXLoader.js';
+
+const FPS = 30;
+const norm = n => n.replace(/^mixamorig\d*[:_]?/i, '');
+
+/** Μετατρέπει ArrayBuffer FBX σε «ανεξάρτητη από χαρακτήρα» κίνηση:
+ *  για κάθε οστό, περιστροφή σε world space ΣΧΕΤΙΚΑ με το T-pose (D = W(t)·W_rest⁻¹)
+ *  και θέση λεκάνης κανονικοποιημένη με το ύψος λεκάνης. Έτσι παίζει σε οποιοδήποτε μοντέλο Mixamo. */
+export async function convert(buf, { key, mode = 'hipsHigh', name = 'clip' } = {}) {
+  const obj = new FBXLoader().parse(buf, '');
+  const clip = obj.animations[0];
+  if (!clip) throw new Error('Το FBX δεν έχει κίνηση');
+  const bones = [], seen = new Set();
+  obj.traverse(o => { if (o.isBone && !seen.has(norm(o.name))) { seen.add(norm(o.name)); bones.push(o); } }); // χωρίς διπλότυπα σκελετών
+  if (!bones.find(b => norm(b.name) === 'Hips')) throw new Error('Δεν βρέθηκε σκελετός Mixamo');
+  obj.updateMatrixWorld(true);
+  const rest = bones.map(b => b.getWorldQuaternion(new THREE.Quaternion()));
+  const hips = bones.find(b => norm(b.name) === 'Hips');
+  const restHips = hips.getWorldPosition(new THREE.Vector3());
+  const foot = bones.find(b => norm(b.name) === 'LeftToeBase') || bones.find(b => norm(b.name) === 'LeftFoot');
+  const floorY = foot.getWorldPosition(new THREE.Vector3()).y;
+  const hipsH = restHips.y - floorY;
+
+  const mixer = new THREE.AnimationMixer(obj); mixer.clipAction(clip).play();
+  const n = Math.max(2, Math.round(clip.duration * FPS) + 1);
+  const q = [], hp = [], sig = [];
+  const head = bones.find(b => norm(b.name) === 'Head');
+  const wq = new THREE.Quaternion(), wv = new THREE.Vector3();
+  for (let f = 0; f < n; f++) {
+    mixer.setTime(Math.min(f / FPS, clip.duration)); obj.updateMatrixWorld(true);
+    bones.forEach((b, i) => {
+      b.getWorldQuaternion(wq).multiply(rest[i].clone().invert());
+      q.push(+wq.x.toFixed(4), +wq.y.toFixed(4), +wq.z.toFixed(4), +wq.w.toFixed(4));
+    });
+    hips.getWorldPosition(wv);
+    hp.push(+((wv.x - restHips.x) / hipsH).toFixed(4), +((wv.y - floorY) / hipsH).toFixed(4), +((wv.z - restHips.z) / hipsH).toFixed(4));
+    sig.push(mode === 'hipsHigh' ? wv.y : head.getWorldPosition(new THREE.Vector3()).y);
+  }
+
+  // Οι κινήσεις Mixamo είναι μία επανάληψη σε loop. Η επανάληψη της εφαρμογής ξεκινά από τη «θέση εκκίνησης»
+  // (π.χ. όρθια στα καθίσματα, πάνω θέση στις κάμψεις, ξαπλωμένη στους κοιλιακούς) και διαρκεί έναν πλήρη κύκλο.
+  const want = mode === 'headLow' ? -1 : 1;
+  const s = sig.map(v => want * v), hi = Math.max(...s), lo = Math.min(...s);
+  const start = s.findIndex(v => v >= hi - (hi - lo) * 0.02);
+  const isLoop = Math.abs(s[0] - s[n - 1]) < (hi - lo) * 0.08;
+  const period = isLoop ? clip.duration : clip.duration - start / FPS;
+  const peaks = [start];
+  return {
+    format: 'gymtrainer-clip@1', name, key, fps: FPS, frames: n,
+    bones: bones.map(b => norm(b.name)), q, hips: hp,
+    repStart: +(start / FPS).toFixed(3), period: +period.toFixed(3), loop: isLoop, duration: +clip.duration.toFixed(3),
+    peaks: peaks.map(p => +(p / FPS).toFixed(2)),
+  };
+}
+window.convert = async (url, opts) => convert(await (await fetch(url)).arrayBuffer(), opts);
+
+document.getElementById('go').onclick = async () => {
+  const f = document.getElementById('file').files[0], out = document.getElementById('out');
+  if (!f) return;
+  out.textContent = '⏳ Μετατροπή…';
+  try {
+    const key = document.getElementById('key').value.trim() || 'generic';
+    const res = await convert(await f.arrayBuffer(), { key, mode: document.getElementById('mode').value, name: f.name.replace(/\.fbx$/i, '') });
+    const file = res.name.toLowerCase().replace(/[^a-z0-9]+/g, '_') + '.json';
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(res)], { type: 'application/json' })); a.download = file; a.textContent = '⬇ ' + file;
+    out.innerHTML = `<p>Διάρκεια ${res.duration}s · επανάληψη από ${res.repStart}s, διάρκεια ${res.period}s · ${res.bones.length} οστά</p><p>Γραμμή για το data/motion-clips.json:<br><code>"${key}": { "src": "assets/anim/${file}" }</code></p>`;
+    out.prepend(a);
+  } catch (e) { out.textContent = '❌ ' + e.message; }
+};
+</script>
+</body></html>
 
 ```

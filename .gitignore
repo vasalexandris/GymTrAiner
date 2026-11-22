@@ -155,3 +155,7 @@ vite.config.ts.timestamp-*
 .nx/cache
 .nx/workspace-data
 .nx/migrate-runs
+
+# Πρωτότυπα αρχεία Mixamo (δεν διανέμονται — μένουν μόνο τα μετατρεμμένα assets/anim/*.json)
+tools/mixamo/
+*.fbx

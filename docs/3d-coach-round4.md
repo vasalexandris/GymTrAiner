@@ -33,12 +33,16 @@ MY REVIEW FIXES IN THE CURRENT CODE — KEEP THEM (do not regress):
   inferMotion, parseReps, mirror, deaccent}; equipment.js {Equipment, equipmentFor}; skinned.js {loadCoachModel}.
 
 TASK A — Animation-clip pipeline (most important)
+NOTE: a first version ALREADY EXISTS in the bundle — js/clips.js + data/motion-clips.json + tools/clip-converter.html
+(Mixamo FBX → "gymtrainer-clip@1" JSON: per-bone world rotation relative to T-pose + normalized hips, one rep from the
+start pose, looped). Three real Mixamo clips are wired: squat (Air Squat), pushup (Push Up), crunch (Situps). Avatar
+blends the clip over the procedural pose (skipped when hands hold equipment), then grounds the lowest contact.
+EXTEND it rather than replace it: keep the JSON format backwards compatible. What is still missing is below.
 1. Clip library: a JSON manifest `data/motion-clips.json` mapping motion keys → clip entries:
    { "squat": { "src": "assets/anim/air_squat.glb", "clip": "Air Squat", "repStart": 0.40, "repEnd": 2.10,
      "loopRegion": true, "mirrorClip": "assets/anim/air_squat_mirror.glb" | null, "rootMotion": "inPlace",
      "contacts": { "feet": "planted" }, "props": { "R": "dumbbell" } } }
-   Start empty (no assets yet) but ship one working example using a clip you can generate procedurally IN CODE from
-   the existing keyframes (bake squat to an AnimationClip) so the path is tested end-to-end.
+   (Today the manifest is { "clips": { key: { src } } } — add the optional fields above.)
 2. Retargeting of clips: clips authored on a standard Mixamo skeleton must play on any loaded Mixamo-compatible model
    (bone-name normalization, rest-pose difference compensation via rest-basis like SkinnedCoach already does, hips
    height scaling by leg length). Also support the common alternative naming (Character Creator / Unreal / VRM

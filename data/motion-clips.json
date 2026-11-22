@@ -1,0 +1,8 @@
+{
+  "note": "Κινήσεις από motion capture ανά άσκηση. Δημιουργία με tools/clip-converter.html από αρχεία Mixamo (FBX). Όπου δεν υπάρχει, χρησιμοποιείται η χειροποίητη κίνηση.",
+  "clips": {
+    "squat":  { "src": "assets/anim/air_squat.json", "from": "Mixamo — Air Squat" },
+    "pushup": { "src": "assets/anim/push_up.json",   "from": "Mixamo — Push Up" },
+    "crunch": { "src": "assets/anim/situps.json",    "from": "Mixamo — Situps" }
+  }
+}

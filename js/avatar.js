@@ -9,6 +9,7 @@ import { GTAOPass } from './vendor/jsm/postprocessing/GTAOPass.js';
 import { OutputPass } from './vendor/jsm/postprocessing/OutputPass.js';
 import { MOTIONS, POSE_KEYS, mirror, sampleCycle } from './motions.js';
 import { loadCoachModel } from './skinned.js';
+import { getClip, applyClip } from './clips.js';
 import { Equipment, BARBELL_PLATE_R } from './equipment.js';
 import { clamp, lerp, smootherstep, clampPose, spineDistribution, applyAxialTwist, solveTwoBoneIK, basisFromDirSec } from './ik.js';
 
@@ -475,6 +476,20 @@ export class Avatar {
     this.motion = MOTIONS[this.motionKey];
     this.yawT = this.motion.yaw;
     this._syncEquipment();
+    // Κίνηση από motion capture (αν υπάρχει για αυτή την άσκηση) — αλλιώς η διαδικαστική
+    const k = this.motionKey;
+    this.clip = null; this.clipReady = getClip(k).then(c => { if (this.motionKey === k) this.clip = c; return c; });
+  }
+
+  /** 'clip' αν η τρέχουσα άσκηση παίζει από motion capture, αλλιώς 'procedural' */
+  get motionSource() { return this.clip && this.skinned && (this.clipW ?? 0) > 0.5 ? 'clip' : 'procedural'; }
+
+  /** Χρόνος μέσα στην κίνηση για την τρέχουσα φάση (κύκλος επανάληψης / στάση / έτοιμος) */
+  _clipTime() {
+    const c = this.clip;
+    if (this.mode === 'cycle') return c.repStart + Math.min(this.t / Math.max(this.dur, 0.01), 1) * c.period;
+    if (this._debugMode) return c.repStart + (this._debugU || 0) * c.period * 0.5;
+    return c.repStart;
   }
   setEquipment(e) {
     this.userEquip = { ...(e || {}) };
@@ -1776,8 +1791,17 @@ export class Avatar {
       const resolvedMeta = this.skinned.drive(T, hips, dt, {
         air: isJump ? Math.max(0, this.cur.lift * this.k) : 0,
         resolveIK: sk => this._resolveIK(sk, this.motion, this.cur, wp, ax, cy, cz),
+        skipHair: true,
       });
       if (resolvedMeta) meta = resolvedMeta;
+      // Motion capture πάνω από τη διαδικαστική πόζα, με ομαλή μετάβαση (idle → διαδικαστική στάση)
+      // Οι κινήσεις motion capture είναι χωρίς βάρη: με αντικείμενο στα χέρια μένει η διαδικαστική (σωστή λαβή)
+      const e = this.equip?.e || {};
+      const handsBusy = !!(e.dumbbells || e.kettlebell || e.barbell || e.band || e.straps || e.goblet || e.singleDumbbell || e.jumpRope || e.pullupBar);
+      const wantClip = this.clip && !handsBusy && this.mode !== 'idle' ? 1 : 0;
+      this.clipW = (this.clipW ?? 0) + (wantClip - (this.clipW ?? 0)) * Math.min(1, dt * 6);
+      if (this.clip && this.clipW > 0.001) applyClip(this.skinned, this.clip, this._clipTime(), this.yaw, this.clipW);
+      this.skinned.updateHair(dt);
     } else {
       const res = this._resolveIK(null, this.motion, this.cur, wp, ax, cy, cz);
       meta = res.meta;
@@ -1897,8 +1921,10 @@ export class Avatar {
   }
 
   /** Άμεση εφαρμογή πόζας (για δοκιμές / snapshots) */
-  debug(key, u, alt = false, equip) {
+  async debug(key, u, alt = false, equip) {
     this.setMotion(key);
+    await this.clipReady;
+    this._debugU = u; this._debugMode = true;
     if (equip) this.setEquipment(equip);
     this.yaw = this.yawT;
     this.mode = u === 0 ? 'ready' : 'hold';
