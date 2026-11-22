@@ -1,5 +1,5 @@
 # GymTrAIner — 3D coach code bundle
-Τα αρχεία του 3D coach. Δες `docs/3d-coach-round3.md` για το prompt του τρέχοντος γύρου.
+Τα αρχεία του 3D coach. Δες `docs/3d-coach-round4.md` για το prompt του τρέχοντος γύρου.
 
 ## js/ik.js
 
