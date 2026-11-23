@@ -136,3 +136,4 @@ button.chip{background:var(--card);font:inherit;font-size:.85rem}
 .adjust-box{margin-top:14px;padding:14px;border-radius:12px;background:var(--bg);border:1px solid var(--line)}
 .hand-guide{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin-top:12px}
 .hg{display:flex;gap:10px;align-items:flex-start}.hg .ic{font-size:1.8rem;line-height:1}
+.ex-done{color:var(--brand)}.ex-skip{color:var(--muted);text-decoration:line-through}

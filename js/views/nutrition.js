@@ -2,6 +2,7 @@ import { h, withLoading, toast, mount } from '../ui.js';
 import { state, save, today } from '../store.js';
 import { geminiJSON, textPart } from '../api.js';
 import { generateBoth } from '../generate.js';
+import { weekdayIndex, dateOf } from '../week.js';
 import { SYSTEM, MEAL_PROMPT, HOUSEHOLD_PROMPT, FOOD_ESTIMATE_PROMPT, ADJUST_DAY_PROMPT } from '../prompts.js';
 
 export async function generateMeal(btn, extra = '') {
@@ -15,18 +16,6 @@ export async function generateMeal(btn, extra = '') {
   });
 }
 
-// ---------- ημερομηνίες εβδομάδας ----------
-const WEEK = ['δευτ', 'τριτ', 'τεταρ', 'πεμπ', 'παρασ', 'σαββ', 'κυρια'];
-const plain = t => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-const weekdayIndex = name => WEEK.findIndex(w => plain(name).startsWith(w));
-const iso = d => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-/** Ημερομηνία της τρέχουσας εβδομάδας (Δευτέρα–Κυριακή) για την ημέρα του προγράμματος */
-function dateOf(dayName) {
-  const wi = weekdayIndex(dayName); if (wi < 0) return null;
-  const now = new Date(), dow = (now.getDay() + 6) % 7;
-  const d = new Date(now); d.setDate(now.getDate() - dow + wi);
-  return iso(d);
-}
 const MACROS = ['kcal', 'protein', 'carbs', 'fat'];
 const r0 = v => Math.round(+v || 0);
 

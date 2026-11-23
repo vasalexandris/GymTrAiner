@@ -7,6 +7,7 @@ import { videoBlock, musicBlock } from '../media.js';
 import { altPanel } from '../alternative.js';
 import { equipmentFor } from '../equipment.js';
 import { getCustomModel } from '../modelstore.js';
+import { setAll } from '../worklog.js';
 import { VideoCoach } from '../videocoach.js';
 
 const JUMP = Symbol('jump'), STOP = Symbol('stop');
@@ -262,7 +263,7 @@ export function sessionView(root) {
       avatar && h('div', { class: 'stage-wrap' }, stage),
       h('div', { class: 'card empty' }, h('div', { class: 'ico' }, '🎉'), h('h2', {}, 'Μπράβο! Τελείωσες την προπόνηση'),
         h('div', { class: 'field', style: 'max-width:320px;margin:16px auto' }, h('label', {}, 'Πόσο δύσκολη ήταν; (1-10)'), h('input', { type: 'range', min: 1, max: 10, value: 6, oninput: e => rpe = +e.target.value })),
-        h('button', { class: 'primary', onclick: () => { state.logs.workouts.push({ date: today(), day: day.day, focus: day.focus, rpe }); save(); cleanup(); toast('Καταγράφηκε!', 'success'); location.hash = '#/'; } }, 'Αποθήκευση')));
+        h('button', { class: 'primary', onclick: () => { state.logs.workouts.push({ date: today(), day: day.day, focus: day.focus, rpe }); setAll(today(), day, 'done'); save(); cleanup(); toast('Καταγράφηκε!', 'success'); location.hash = '#/'; } }, 'Αποθήκευση')));
   }
 
   async function start() {

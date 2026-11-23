@@ -26,6 +26,7 @@ const STEPS = [
     { k: 'equipment', label: 'Τι εξοπλισμό έχεις;', type: 'multi', options: EQUIP },
     { k: 'days', label: 'Ποιες μέρες μπορείς να γυμνάζεσαι;', type: 'multi', options: DAYS },
     { k: 'minutes', label: 'Διάρκεια ανά προπόνηση (λεπτά)', type: 'select', options: ['20-30', '30-45', '45-60', '60-90'] },
+    { k: 'sessions_per_day', label: 'Πόσες φορές την ημέρα μπορείς να γυμναστείς;', type: 'select', options: ['Μία φορά', 'Δύο (πρωί & απόγευμα) όποτε γίνεται', 'Δύο κάθε μέρα', 'Όποτε βρω χρόνο — με ευελιξία'] },
     { k: 'music_genres', label: '🎵 Τι μουσική σου αρέσει όταν γυμνάζεσαι; (διάλεξε όσες θες)', type: 'multi', options: GENRE_OPTIONS },
     { k: 'music_artists', label: 'Αγαπημένοι καλλιτέχνες/τραγούδια (προαιρετικό)', type: 'text', ph: 'π.χ. Queen, Eminem, Μπάμπης Στόκας' },
     { k: 'likes', label: 'Τι σου αρέσει / τι αποφεύγεις;', type: 'textarea', ph: 'π.χ. μου αρέσει το HIIT, δεν θέλω τρέξιμο…' },

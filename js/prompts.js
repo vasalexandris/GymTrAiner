@@ -39,6 +39,11 @@ export function contextText({ includePlans = false } = {}) {
   if (s.avoid?.length) parts.push('## Ασκήσεις που ο χρήστης ΔΕΝ μπορεί ή δεν θέλει να κάνει (απόφυγε τες και παρόμοιες)\n' + s.avoid.slice(-15).map(a => `- ${a.name}${a.reason ? ' — ' + a.reason : ''}`).join('\n'));
   const fl = s.foodLog ? Object.entries(s.foodLog).filter(([, d]) => Object.keys(d.meals || {}).length).sort().slice(-4) : [];
   if (fl.length) parts.push('## Τι έφαγε πραγματικά (πρόσφατα)\n' + fl.map(([date, d]) => `${date}: ` + Object.values(d.meals || {}).map(x => x.status === 'ok' ? `✓ ${x.name}` : x.status === 'skip' ? `✗ παρέλειψε ${x.name}` : `✎ αντί για ${x.name}: ${x.text}${x.est ? ` (~${x.est.kcal} kcal)` : ''}`).join('; ')).join('\n'));
+  const wl = s.workoutLog ? Object.entries(s.workoutLog).sort().slice(-7) : [];
+  if (wl.length) parts.push('## Τι έκανε πραγματικά στη γυμναστική (πρόσφατα)\n' + wl.map(([date, d]) => `${date}: ` + [
+    ...Object.entries(d.entries || {}).map(([lbl, e]) => `${lbl}: έκανε ${e.done || 0}/${e.total || 0} ασκήσεις${e.skipped?.length ? ` (παρέλειψε: ${e.skipped.join(', ')})` : ''}${e.mod ? ` [${e.mod}]` : ''}`),
+    ...(d.extra || []).map(x => `επιπλέον: ${x.text}${x.est ? ` (~${x.est.minutes}΄, ${x.est.kcal} kcal, ${x.est.intensity})` : ''}`),
+  ].join('; ')).join('\n'));
   if (includePlans && s.plan) parts.push('## Τρέχον πρόγραμμα γυμναστικής\n' + s.plan.days.map(d => `${d.day}: ${d.focus}`).join('; '));
   if (includePlans && s.meal) parts.push(`## Τρέχον πρόγραμμα διατροφής\n~${s.meal.daily_calories} kcal/ημέρα`);
   return parts.join('\n\n');
@@ -69,12 +74,13 @@ const PLAN_SHAPE = `{
  "progression": "πώς προοδεύει ο χρήστης τις επόμενες εβδομάδες",
  "safety_notes": ["..."],
  "days": [{
-   "day": "Δευτέρα", "rest": false, "focus": "π.χ. Πλάτη & Δικέφαλοι", "duration_min": 45,
+   "day": "Δευτέρα", "session": "" , "rest": false, "focus": "π.χ. Πλάτη & Δικέφαλοι", "duration_min": 45,
    "warmup": ["..."], "cooldown": ["..."],
    "exercises": [${EXERCISE_SHAPE}]
  }]
 }
-Συμπερίλαβε και τις 7 ημέρες· οι μέρες ανάπαυσης έχουν "rest": true, "exercises": [] και προαιρετικά ήπια δραστηριότητα στο "focus".`;
+Συμπερίλαβε και τις 7 ημέρες με τη σειρά Δευτέρα→Κυριακή· οι μέρες ανάπαυσης έχουν "rest": true, "exercises": [] και προαιρετικά ήπια δραστηριότητα στο "focus".
+Αν ο χρήστης θέλει/μπορεί 2 προπονήσεις την ίδια μέρα (π.χ. πρωί και απόγευμα), βάλε 2 διαδοχικές εγγραφές με την ίδια "day" και "session": "Πρωί" / "Απόγευμα" (συνήθως η 2η πιο σύντομη/ήπια ή διαφορετικής μυϊκής ομάδας). Αλλιώς "session": "".`;
 
 const MEAL_SHAPE = `{
  "summary": "...", "daily_calories": number, "macros": {"protein_g": n, "carbs_g": n, "fat_g": n}, "water_l": number,
@@ -162,3 +168,25 @@ ${wish ? 'Επιθυμία χρήστη: ' + wish : ''}
 ${contextText()}
 
 Επίστρεψε ΜΟΝΟ JSON: {"meals":[{"index":n,"type":"...","name":"...","description":"υλικά & γραμμάρια","household":"ποσότητες χωρίς ζυγαριά","kcal":n,"protein":n,"carbs":n,"fat":n}],"note":"1-2 προτάσεις ενθάρρυνσης/εξήγησης"}`;
+
+export const ACTIVITY_ESTIMATE_PROMPT = text => `Ο χρήστης έκανε αυτή τη φυσική δραστηριότητα (εκτός προγράμματος): «${text}».
+Εκτίμησε ρεαλιστικά διάρκεια, ένταση, θερμίδες (για το βάρος του χρήστη) και ποιες μυϊκές ομάδες κουράστηκαν.
+${contextText()}
+Επίστρεψε ΜΟΝΟ JSON: {"name":"σύντομη ονομασία","minutes":n,"intensity":"χαμηλή|μέτρια|υψηλή","kcal":n,"muscles":"...","note":"σύντομο σχόλιο, π.χ. αν επηρεάζει την αυριανή προπόνηση"}`;
+
+export const EXTRA_SESSION_PROMPT = (day, minutes, wish, doneToday) => `Ο χρήστης έχει διαθέσιμο χρόνο για ΕΠΙΠΛΕΟΝ προπόνηση σήμερα (${day}) — περίπου ${minutes} λεπτά.
+${doneToday ? 'Σήμερα έχει ήδη κάνει: ' + doneToday : 'Σήμερα δεν έχει κάνει ακόμα άλλη προπόνηση.'}
+${wish ? 'Επιθυμία: ' + wish : ''}
+Φτιάξε μία σύντομη προπόνηση που συμπληρώνει (δεν επιβαρύνει) ό,τι έκανε σήμερα και ό,τι έχει αύριο, με τον εξοπλισμό του.
+${contextText({ includePlans: true })}
+
+Επίστρεψε ΜΟΝΟ JSON με μία εγγραφή ημέρας: {"day":"${day}","session":"Επιπλέον","rest":false,"focus":"...","duration_min":${minutes},"warmup":["..."],"cooldown":["..."],"exercises":[${EXERCISE_SHAPE}]}`;
+
+export const REPLAN_WEEK_PROMPT = (remaining, wish) => `Ο χρήστης θέλει να ξαναϋπολογιστεί η ΥΠΟΛΟΙΠΗ εβδομάδα του προγράμματος γυμναστικής με βάση τι έκανε πραγματικά (δες καταγραφή) και την επιθυμία του.
+Επιθυμία χρήστη: ${wish || '(δεν δήλωσε — ισορρόπησε ό,τι χάθηκε ή έγινε επιπλέον)'}
+Υπόλοιπες ημέρες προς αναπρογραμματισμό: ${remaining.join(', ')}
+Κανόνες: αν έχασε προπονήσεις, μην τις «στοιβάξεις» όλες· κράτα αποκατάσταση ανάμεσα σε ίδιες μυϊκές ομάδες· αν ζητά περισσότερο ή 2 προπονήσεις την ημέρα, αύξησε σταδιακά και με ασφάλεια.
+${contextText({ includePlans: true })}
+
+Επίστρεψε ΜΟΝΟ JSON: {"note":"1-2 προτάσεις τι άλλαξε και γιατί","days":[ εγγραφές ΜΟΝΟ για τις παραπάνω ημέρες, με τη σειρά, στη μορφή:
+{"day":"...","session":"" ή "Πρωί"/"Απόγευμα","rest":false,"focus":"...","duration_min":n,"warmup":["..."],"cooldown":["..."],"exercises":[${EXERCISE_SHAPE}]} ]}`;
