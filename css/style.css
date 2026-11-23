@@ -120,3 +120,19 @@ svg.chart{width:100%;height:auto}
 .video-status{position:absolute;left:50%;top:50px;transform:translateX(-50%);background:rgba(15,23,42,.8);color:#fff;padding:6px 12px;border-radius:999px;font-size:.85rem;z-index:2;pointer-events:none;max-width:90%;text-align:center}
 .video-box iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
 .seg-box{margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--bg)}
+
+/* Διατροφή: καταγραφή γευμάτων */
+.chip.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+button.chip{background:var(--card);font:inherit;font-size:.85rem}
+.meal-actions{margin-top:6px;gap:6px}
+.household{margin-top:3px;color:var(--text);background:var(--bg);border-radius:8px;padding:4px 8px;display:inline-block}
+.other-note{margin-top:4px;color:var(--warn)}
+.other-form{margin-top:8px;padding:10px;border:1px dashed var(--line);border-radius:10px}
+.meal.logged-ok strong{color:var(--brand)}
+.meal.logged-skip strong{text-decoration:line-through;color:var(--muted)}
+.food-progress{margin:10px 0 6px}
+.food-progress .bar{height:8px;border-radius:4px;background:var(--line);overflow:hidden;margin-top:4px}
+.food-progress .bar i{display:block;height:100%;border-radius:4px}
+.adjust-box{margin-top:14px;padding:14px;border-radius:12px;background:var(--bg);border:1px solid var(--line)}
+.hand-guide{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin-top:12px}
+.hg{display:flex;gap:10px;align-items:flex-start}.hg .ic{font-size:1.8rem;line-height:1}

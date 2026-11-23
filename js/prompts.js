@@ -37,6 +37,8 @@ export function contextText({ includePlans = false } = {}) {
   if (s.medical.length) parts.push('## Ιατρικές εξετάσεις (περίληψη)\n' + s.medical.map(m =>
     `${m.date} ${m.name}: ${m.analysis.summary}\nΣυνέπειες προπόνησης: ${m.analysis.training_implications}\nΣυνέπειες διατροφής: ${m.analysis.nutrition_implications}`).join('\n'));
   if (s.avoid?.length) parts.push('## Ασκήσεις που ο χρήστης ΔΕΝ μπορεί ή δεν θέλει να κάνει (απόφυγε τες και παρόμοιες)\n' + s.avoid.slice(-15).map(a => `- ${a.name}${a.reason ? ' — ' + a.reason : ''}`).join('\n'));
+  const fl = s.foodLog ? Object.entries(s.foodLog).filter(([, d]) => Object.keys(d.meals || {}).length).sort().slice(-4) : [];
+  if (fl.length) parts.push('## Τι έφαγε πραγματικά (πρόσφατα)\n' + fl.map(([date, d]) => `${date}: ` + Object.values(d.meals || {}).map(x => x.status === 'ok' ? `✓ ${x.name}` : x.status === 'skip' ? `✗ παρέλειψε ${x.name}` : `✎ αντί για ${x.name}: ${x.text}${x.est ? ` (~${x.est.kcal} kcal)` : ''}`).join('; ')).join('\n'));
   if (includePlans && s.plan) parts.push('## Τρέχον πρόγραμμα γυμναστικής\n' + s.plan.days.map(d => `${d.day}: ${d.focus}`).join('; '));
   if (includePlans && s.meal) parts.push(`## Τρέχον πρόγραμμα διατροφής\n~${s.meal.daily_calories} kcal/ημέρα`);
   return parts.join('\n\n');
@@ -76,7 +78,7 @@ const PLAN_SHAPE = `{
 
 const MEAL_SHAPE = `{
  "summary": "...", "daily_calories": number, "macros": {"protein_g": n, "carbs_g": n, "fat_g": n}, "water_l": number,
- "days": [{"day":"Δευτέρα","meals":[{"type":"Πρωινό|Δεκατιανό|Μεσημεριανό|Απογευματινό|Βραδινό","name":"...","description":"υλικά & ποσότητες","kcal":n,"protein":n,"carbs":n,"fat":n}]}],
+ "days": [{"day":"Δευτέρα","meals":[{"type":"Πρωινό|Δεκατιανό|Μεσημεριανό|Απογευματινό|Βραδινό","name":"...","description":"υλικά & ποσότητες σε γραμμάρια","household":"οι ίδιες ποσότητες ΧΩΡΙΣ ζυγαριά, με καθημερινά μέτρα: π.χ. 1 φλιτζάνι τσαγιού, 2 κουταλιές της σούπας, 1 φέτα, όσο η παλάμη σου, μια γροθιά, ένα μέτριο φρούτο","kcal":n,"protein":n,"carbs":n,"fat":n}]}],
  "shopping_list": ["..."], "tips": ["..."]
 }`;
 
@@ -136,3 +138,27 @@ ${contextText()}
 ${libHint()}
 Επίστρεψε ΜΟΝΟ JSON με μία άσκηση σε αυτή τη μορφή:
 ${EXERCISE_SHAPE}`;
+
+export const HOUSEHOLD_PROMPT = days => `Για κάθε γεύμα παρακάτω γράψε τις ποσότητες ΧΩΡΙΣ ζυγαριά, με καθημερινά μέτρα που καταλαβαίνει όλος ο κόσμος στην Ελλάδα
+(φλιτζάνι τσαγιού, κουταλιά της σούπας/του γλυκού, φέτα, χούφτα, «όσο η παλάμη σου», «μια γροθιά», «μέγεθος τράπουλας», μέτριο φρούτο, μπολ).
+Να είναι σύντομο και πρακτικό, μία γραμμή ανά γεύμα.
+${days.map((d, i) => `Ημέρα ${i} (${d.day}):\n` + d.meals.map((m, j) => `  ${j}. ${m.name}: ${m.description}`).join('\n')).join('\n')}
+
+Επίστρεψε ΜΟΝΟ JSON: {"days": [["γεύμα 0", "γεύμα 1", ...], ...]} με ίδια σειρά και πλήθος.`;
+
+export const FOOD_ESTIMATE_PROMPT = (text, planned) => `Ο χρήστης αντί για το προγραμματισμένο γεύμα «${planned.name}» (${planned.kcal} kcal) έφαγε:
+«${text}»
+Εκτίμησε ρεαλιστικά θερμίδες και μακροθρεπτικά (αν οι ποσότητες είναι αόριστες, υπέθεσε συνηθισμένη ελληνική μερίδα και γράψε την υπόθεση στο note).
+Επίστρεψε ΜΟΝΟ JSON: {"name":"σύντομη ονομασία","kcal":n,"protein":n,"carbs":n,"fat":n,"note":"σύντομο σχόλιο/υπόθεση, χωρίς ηθικολογία"}`;
+
+export const ADJUST_DAY_PROMPT = (day, eaten, remaining, targets, wish) => `Πρόγραμμα διατροφής, ημέρα ${day.day}. Στόχος ημέρας: ${targets.daily_calories} kcal, πρωτεΐνη ${targets.macros?.protein_g}g, υδατάνθρακες ${targets.macros?.carbs_g}g, λιπαρά ${targets.macros?.fat_g}g.
+Ήδη έφαγε (σύνολο ${eaten.kcal} kcal, Π ${eaten.protein}g, Υ ${eaten.carbs}g, Λ ${eaten.fat}g):
+${eaten.lines.join('\n')}
+Υπόλοιπα γεύματα της ημέρας (με index):
+${remaining.map(r => `${r.index}. ${r.meal.type}: ${r.meal.name} (${r.meal.kcal} kcal)`).join('\n')}
+${wish ? 'Επιθυμία χρήστη: ' + wish : ''}
+Προσάρμοσε ΜΟΝΟ τα υπόλοιπα γεύματα ώστε το σύνολο της ημέρας να πλησιάσει τον στόχο (ποτέ κάτω από ασφαλές όριο, χωρίς «τιμωρία» για ό,τι έφαγε· αν ξεπέρασε πολύ τον στόχο, μοίρασε ήπια και πες ότι μία μέρα δεν χαλάει τίποτα).
+Σεβάσου αλλεργίες/προτιμήσεις.
+${contextText()}
+
+Επίστρεψε ΜΟΝΟ JSON: {"meals":[{"index":n,"type":"...","name":"...","description":"υλικά & γραμμάρια","household":"ποσότητες χωρίς ζυγαριά","kcal":n,"protein":n,"carbs":n,"fat":n}],"note":"1-2 προτάσεις ενθάρρυνσης/εξήγησης"}`;
