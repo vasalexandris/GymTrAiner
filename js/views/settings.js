@@ -2,6 +2,7 @@ import { h, toast, download , mount} from '../ui.js';
 import { state, save, exportData, importData, resetAll } from '../store.js';
 import { gemini, textPart, listModels } from '../api.js';
 import { getCustomModel, saveCustomModel, deleteCustomModel } from '../modelstore.js';
+import { LOOKS } from '../avatar.js';
 import { loadLibrary, libraryStats, exportLibrary } from '../videolib.js';
 
 export function settingsView(root) {
@@ -49,7 +50,7 @@ export function settingsView(root) {
 
 function coachCard() {
   const info = h('p', { class: 'small muted' }, 'Έλεγχος…');
-  const refresh = () => getCustomModel().then(m => { info.textContent = m ? `✅ Έχεις ανεβάσει: ${m.name} (${(m.buf.byteLength / 1048576).toFixed(1)} MB, ${m.date}). Διάλεξέ το στην προπόνηση: «Coach: Δικό μου μοντέλο».` : 'Δεν έχεις ανεβάσει δικό σου μοντέλο — χρησιμοποιείται η ρεαλιστική Michelle.'; });
+  const refresh = () => getCustomModel().then(m => { info.textContent = m ? `✅ Έχεις ανεβάσει: ${m.name} (${(m.buf.byteLength / 1048576).toFixed(1)} MB, ${m.date}). Διάλεξέ το στην προπόνηση: «Coach: Δικό μου μοντέλο».` : 'Δεν έχεις ανεβάσει δικό σου μοντέλο.'; });
   const input = h('input', { type: 'file', accept: '.glb,model/gltf-binary', onchange: async e => {
     const f = e.target.files[0]; if (!f) return;
     if (f.size > 60 * 1048576) return toast('Πολύ μεγάλο αρχείο (όριο 60MB)', 'error');
@@ -76,7 +77,9 @@ function coachCard() {
         [['', 'Αυτόματη (υψηλή σε PC, κανονική σε κινητό)'], ['high', 'Υψηλή (σκιές επαφής/ambient occlusion)'], ['normal', 'Κανονική (πιο γρήγορη)']].map(([v, l]) => h('option', { value: v, selected: (state.settings.coach?.quality || '') === v }, l)))),
       h('div', { class: 'field' }, h('label', {}, 'Περιβάλλον'), h('select', { onchange: e => { (state.settings.coach ||= {}).env = e.target.value; save(); } },
         [['studio', 'Φωτογραφικό στούντιο'], ['home', 'Σπίτι (ξύλινο πάτωμα)']].map(([v, l]) => h('option', { value: v, selected: (state.settings.coach?.env || 'studio') === v }, l)))),
-      h('div', { class: 'field' }, h('label', {}, 'Κόμμωση coach (ρεαλιστική)'), h('select', { onchange: e => { (state.settings.coach ||= {}).hair = e.target.value; save(); } },
+      h('div', { class: 'field' }, h('label', {}, 'Ποιος/ποια coach;'), h('select', { onchange: e => { const C = (state.settings.coach ||= {}); C.look = e.target.value; C.lookV2 = true; C.view = '3d'; save(); toast('Ο coach άλλαξε', 'success'); } },
+        Object.entries(LOOKS).filter(([k, l]) => l.model).map(([k, l]) => h('option', { value: k, selected: (state.settings.coach?.look || 'real') === k }, `${l.gender === 'm' ? '🧔' : '👩'} ${l.name}`)))),
+      h('div', { class: 'field' }, h('label', {}, 'Κόμμωση (μόνο για τη Μισέλ)'), h('select', { onchange: e => { (state.settings.coach ||= {}).hair = e.target.value; save(); } },
         [['original', 'Αρχική'], ['ponytail', 'Αλογοουρά'], ['bun', 'Κότσος'], ['braid', 'Πλεξούδα'], ['short', 'Κοντά']].map(([v, l]) => h('option', { value: v, selected: (state.settings.coach?.hair || 'original') === v }, l))))),
     h('div', { class: 'row' }, h('label', { class: 'btn', style: 'margin:0;cursor:pointer;font-weight:400' }, '⬆ Ανέβασμα .glb', h('span', { hidden: true }, input)),
       h('button', { class: 'danger', onclick: async () => { await deleteCustomModel(); const C = state.settings.coach; if (C?.look === 'custom') { C.look = 'real'; save(); } toast('Διαγράφηκε'); refresh(); } }, 'Διαγραφή μοντέλου')),

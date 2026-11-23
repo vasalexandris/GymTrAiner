@@ -159,3 +159,4 @@ vite.config.ts.timestamp-*
 # Πρωτότυπα αρχεία Mixamo (δεν διανέμονται — μένουν μόνο τα μετατρεμμένα assets/anim/*.json)
 tools/mixamo/
 *.fbx
+tools/chars/

@@ -6,7 +6,7 @@ import { GLTFLoader } from './vendor/jsm/loaders/GLTFLoader.js';
 import { basisFromDirSec, applyAxialTwist, solveTwoBoneIK, clamp } from './ik.js';
 import { HairController } from './hair.js';
 
-const norm = n => n.replace(/^mixamorig[:_]?/i, '');
+const norm = n => n.replace(/^mixamorig\d*[:_]?/i, ''); // και mixamorig5:Hips, mixamorig1Hips κ.λπ.
 const V = () => new THREE.Vector3();
 const Y = new THREE.Vector3(0, 1, 0);
 const Z = new THREE.Vector3(0, 0, 1);

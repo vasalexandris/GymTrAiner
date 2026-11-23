@@ -28,7 +28,7 @@ export function sessionView(root) {
   const ctl = { stop: false, jump: null, skip: false, skipIntro: false };
   let ei = 0, set = 1, rep = 0, phase = 'ready', paused = false, started = false, avatar = null, wake = null, altOpen = false;
   const N = () => day.exercises.length;
-  const LOOK_LABEL = { real: '🧍‍♀️ Coach: Ρεαλιστική', male: '🧔 Coach: Απλός', female: '👩 Coach: Απλή', custom: '⭐ Coach: Δικό μου μοντέλο' };
+  const LOOK_LABEL = k => k === 'custom' ? '⭐ Coach: Δικό μου μοντέλο' : k === 'male' ? '🧔 Coach: Απλός (γεωμετρικός)' : k === 'female' ? '👩 Coach: Απλή (γεωμετρική)' : `${LOOKS[k].gender === 'm' ? '🧔' : '👩'} Coach: ${LOOKS[k].name}`;
 
   // ---------- UI ----------
   const stage = h('div', { class: 'stage' });
@@ -129,7 +129,7 @@ export function sessionView(root) {
       ],
       C.view === '3d' && h('select', { style: 'width:auto', title: 'Εμφάνιση coach', onchange: e => {
         C.look = e.target.value; C.view = '3d'; save(); makeAvatar(); drawControls();
-      } }, Object.keys(LOOKS).filter(k => k !== 'custom' || customModel).map(k => h('option', { value: k, selected: k === C.look }, LOOK_LABEL[k]))),
+      } }, Object.keys(LOOKS).filter(k => k !== 'custom' || customModel).map(k => h('option', { value: k, selected: k === C.look }, LOOK_LABEL(k)))),
       C.view === '3d' && (C.look === 'real' || !C.look) && h('select', { style: 'width:auto', title: 'Κόμμωση', onchange: e => { C.hair = e.target.value; save(); avatar?.setHair(C.hair); } },
         [['original', '💇 Κόμμωση: αρχική'], ['ponytail', '💇 Αλογοουρά'], ['bun', '💇 Κότσος'], ['braid', '💇 Πλεξούδα'], ['short', '💇 Κοντά']].map(([v, l]) => h('option', { value: v, selected: (C.hair || 'original') === v }, l))),
       btn('⛶', toggleFull),

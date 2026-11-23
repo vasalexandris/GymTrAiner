@@ -61,7 +61,7 @@ for (const it of slice) for (const u of [0, 1]) {
   const lbl = document.createElement('div'); lbl.className = 'lbl';
   lbl.innerHTML = `<b>${it.m}</b> · θέση ${u} · εξοπλισμός: ${Object.keys(it.eq).join(', ') || '—'}<br>${it.title.replace(/</g, '&lt;')}`;
   cell.append(view, lbl); g.append(cell);
-  const a = new Avatar(view, 'real', { quality: 'normal', hair: q.get('hair') || undefined }); await a.loaded;
+  const a = new Avatar(view, q.get('look') || 'real', { quality: 'normal', hair: q.get('hair') || undefined }); await a.loaded;
   a.paused = true; cancelAnimationFrame(a.raf); await a.debug(it.m, u, false, it.eq);
   lbl.innerHTML += ` · <i>${a.motionSource === 'clip' ? '🎥 motion capture' : 'χειροποίητη'}</i>`;
 }

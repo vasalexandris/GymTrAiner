@@ -1369,7 +1369,8 @@ const _X = new THREE.Vector3(1, 0, 0);
 const _DOWN = new THREE.Vector3(0, -1, 0);
 
 export const LOOKS = {
-  real:   { name: 'Ρεαλιστική (Michelle)', model: 'assets/models/Michelle.glb', proxy: 'male', hair: 'original' },
+  real:   { name: 'Μισέλ', gender: 'f', model: 'assets/models/Michelle.glb', proxy: 'male', hair: 'original' },
+  nikos:  { name: 'Νίκος', model: 'assets/models/coach_nikos.glb', proxy: 'male', hair: 'original', gender: 'm' },
   custom: { name: 'Δικό μου μοντέλο', custom: true, proxy: 'male', hair: 'original' },
   male:   { name: 'Άντρας', skin: 0xe2ab80, hair: 'short', hairColor: 0x2a1f1a, top: 0x16a34a, bottom: 0x1f2937, shoulder: 1.0, hip: 1.0, waist: 1.0, ponytail: false, leggings: false, scale: 1 },
   female: { name: 'Γυναίκα', skin: 0xeab898, hair: 'ponytail', hairColor: 0x6b3f26, top: 0x0ea5e9, bottom: 0x334155, shoulder: 0.88, hip: 1.1, waist: 0.86, ponytail: true, leggings: true, scale: 0.96 },
@@ -3493,7 +3494,7 @@ import { GLTFLoader } from './vendor/jsm/loaders/GLTFLoader.js';
 import { basisFromDirSec, applyAxialTwist, solveTwoBoneIK, clamp } from './ik.js';
 import { HairController } from './hair.js';
 
-const norm = n => n.replace(/^mixamorig[:_]?/i, '');
+const norm = n => n.replace(/^mixamorig\d*[:_]?/i, ''); // και mixamorig5:Hips, mixamorig1Hips κ.λπ.
 const V = () => new THREE.Vector3();
 const Y = new THREE.Vector3(0, 1, 0);
 const Z = new THREE.Vector3(0, 0, 1);
@@ -6161,7 +6162,7 @@ for (const it of slice) for (const u of [0, 1]) {
   const lbl = document.createElement('div'); lbl.className = 'lbl';
   lbl.innerHTML = `<b>${it.m}</b> · θέση ${u} · εξοπλισμός: ${Object.keys(it.eq).join(', ') || '—'}<br>${it.title.replace(/</g, '&lt;')}`;
   cell.append(view, lbl); g.append(cell);
-  const a = new Avatar(view, 'real', { quality: 'normal', hair: q.get('hair') || undefined }); await a.loaded;
+  const a = new Avatar(view, q.get('look') || 'real', { quality: 'normal', hair: q.get('hair') || undefined }); await a.loaded;
   a.paused = true; cancelAnimationFrame(a.raf); await a.debug(it.m, u, false, it.eq);
   lbl.innerHTML += ` · <i>${a.motionSource === 'clip' ? '🎥 motion capture' : 'χειροποίητη'}</i>`;
 }
