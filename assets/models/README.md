@@ -4,3 +4,4 @@
 - Ο coach οδηγείται από τον κώδικα (`js/skinned.js`): οποιοδήποτε `.glb` με σκελετό τύπου Mixamo μπορεί να μπει στη θέση του από τις Ρυθμίσεις → 3D Coach.
 - **coach_nikos.glb** («Νίκος»): χαρακτήρας Mixamo (Adobe), μετατραπείς με tools/character-converter.html (υφές 1024px, ενωμένος σκελετός). Ίδιοι όροι χρήσης με τη Michelle.
 - **coach_eleni.glb** («Ελένη»): χαρακτήρας Mixamo (Adobe), μετατραπείς με tools/character-converter.html.
+- coach_nikos.glb: ρούχα προσαρμοσμένα με tools/outfit-nikos.html (κοντό μανίκι, κοντή κάλτσα, αθλητικά χωρίς τάπες, μπλε σορτς). Το εργαλείο εφαρμόζεται στην αρχική μετατροπή (git history, commit acd54ab).

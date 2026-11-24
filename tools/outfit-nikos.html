@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="el"><head><meta charset="utf-8"><title>GymTrAIner — Αλλαγή ρούχων coach (Νίκος)</title>
+<script type="importmap">{ "imports": { "three": "../js/vendor/three.module.min.js" } }</script></head>
+<body style="font:15px system-ui;padding:20px">
+<h1>👕 Αλλαγή ρούχων: Νίκος</h1>
+<p>Κοντό μανίκι, κοντή κάλτσα, αθλητικά χωρίς τάπες, σκούρο σορτς. Εξάγει νέο <code>coach_nikos.glb</code>.</p>
+<button id="go">Εφαρμογή & λήψη</button> <pre id="out"></pre>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from '../js/vendor/jsm/loaders/GLTFLoader.js';
+import { GLTFExporter } from '../js/vendor/jsm/exporters/GLTFExporter.js';
+
+const OPT = {
+  sleeveCut: 0.42,      // μανίκι: κόψιμο στο 42% της απόστασης ώμος→αγκώνας
+  sleeveShrink: 0.80,   // πόσο λεπταίνει το «μπράτσο» (ακτινικά, προς τον άξονα του χεριού)
+  sockCut: 0.10,        // κάλτσα: ύψος (m) πάνω από τον αστράγαλο
+  sockShrink: 0.90,
+  shorts: 0x1c2740,     // σκούρο μπλε
+  shoe: 0xeceff3, sole: 0x2b2f36,
+};
+
+const V = () => new THREE.Vector3();
+function bonePos(mesh, name) { // θέση οστού στον χώρο του σκελετού (bind pose)
+  const i = mesh.skeleton.bones.findIndex(b => b.name === name); if (i < 0) return null;
+  return V().setFromMatrixPosition(mesh.skeleton.boneInverses[i].clone().invert());
+}
+const toSkel = (mesh, v) => v.clone().applyMatrix4(mesh.bindMatrix);
+const fromSkel = (mesh, v) => v.clone().applyMatrix4(mesh.bindMatrixInverse);
+
+/** Μέσος τόνος δέρματος από την υφή στις κορυφές του σώματος (γόνατα) */
+function skinColor(body) {
+  const img = body.material.map.image, c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+  const g = c.getContext('2d'); g.drawImage(img, 0, 0); const data = g.getImageData(0, 0, c.width, c.height).data;
+  const uv = body.geometry.attributes.uv, pos = body.geometry.attributes.position; let r = 0, gg = 0, b = 0, n = 0;
+  const knee = bonePos(body, 'LeftLeg'); const p = V();
+  for (let i = 0; i < pos.count; i += 3) {
+    p.fromBufferAttribute(pos, i); const sp = toSkel(body, p); if (sp.distanceTo(knee) > 0.12 * body.userData.H || sp.y > knee.y - 0.04 * body.userData.H) continue; // κάτω μέρος γονάτου (εκεί ενώνεται με τη γάμπα)
+    const x = Math.floor(uv.getX(i) % 1 * c.width), y = Math.floor((uv.getY(i) % 1) * c.height), o = (y * c.width + x) * 4;
+    r += data[o]; gg += data[o + 1]; b += data[o + 2]; n++;
+  }
+  return new THREE.Color().setRGB(r / n / 255, gg / n / 255, b / n / 255, THREE.SRGBColorSpace);
+}
+
+/** Χωρίζει ένα skinned mesh σε δύο (κρατά/νέο υλικό) με βάση συνάρτηση ανά τρίγωνο */
+function split(mesh, pick, newMat, name) {
+  const g = mesh.geometry, idx = g.index.array, keep = [], take = [];
+  const a = V(), b = V(), c = V(), pos = g.attributes.position;
+  for (let t = 0; t < idx.length; t += 3) {
+    a.fromBufferAttribute(pos, idx[t]); b.fromBufferAttribute(pos, idx[t + 1]); c.fromBufferAttribute(pos, idx[t + 2]);
+    const cen = toSkel(mesh, a.clone().add(b).add(c).multiplyScalar(1 / 3));
+    (pick(cen, [toSkel(mesh, a), toSkel(mesh, b), toSkel(mesh, c)]) ? take : keep).push(idx[t], idx[t + 1], idx[t + 2]);
+  }
+  const g2 = g.clone(); g2.setIndex(take); g.setIndex(keep);
+  const m2 = new THREE.SkinnedMesh(g2, newMat); m2.name = name;
+  m2.bind(mesh.skeleton, mesh.bindMatrix); mesh.parent.add(m2);
+  return m2;
+}
+
+/** Λεπταίνει τις κορυφές προς τον άξονα p0→p1, σταδιακά από το «σύνορο» (tCut) */
+function shrinkToward(mesh, p0, p1, tCut, factor, used) {
+  const pos = mesh.geometry.attributes.position, axis = p1.clone().sub(p0), L = axis.length(); axis.normalize();
+  for (const i of used) {
+    const v = toSkel(mesh, V().fromBufferAttribute(pos, i));
+    const t = v.clone().sub(p0).dot(axis) / L; if (t < tCut) continue;
+    const k = THREE.MathUtils.smoothstep(t, tCut, tCut + 0.25);
+    const onAxis = p0.clone().addScaledVector(axis, t * L), radial = v.clone().sub(onAxis);
+    const nv = onAxis.add(radial.multiplyScalar(1 - (1 - factor) * k));
+    const lv = fromSkel(mesh, nv); pos.setXYZ(i, lv.x, lv.y, lv.z);
+  }
+  pos.needsUpdate = true; mesh.geometry.computeVertexNormals();
+}
+/** Ισιώνει την άκρη του μανικιού: κορυφές του πουκαμίσου πέρα από το κόψιμο μετακινούνται πάνω στο επίπεδο κοπής */
+function snapEdge(mesh, sh, axis, L, cut) {
+  const pos = mesh.geometry.attributes.position;
+  for (const i of new Set(mesh.geometry.index.array)) {
+    const v = toSkel(mesh, V().fromBufferAttribute(pos, i)), t = v.clone().sub(sh).dot(axis) / L;
+    if (Math.sign(v.x) !== Math.sign(sh.x) || t <= cut) continue;
+    const lv = fromSkel(mesh, v.addScaledVector(axis, (cut - t) * L)); pos.setXYZ(i, lv.x, lv.y, lv.z);
+  }
+  pos.needsUpdate = true;
+}
+const usedVerts = m => new Set(m.geometry.index.array);
+
+export async function apply(src) {
+  const gltf = await new GLTFLoader().loadAsync(src), root = gltf.scene, M = {};
+  root.traverse(o => { if (o.isSkinnedMesh) M[o.name.replace(/^Ch\d+_/, '')] = o; });
+  root.updateMatrixWorld(true);
+  const H = bonePos(M.Body, 'HeadTop_End').y - Math.min(bonePos(M.Body, 'LeftToeBase').y, 0);
+  M.Body.userData.H = H;
+  const log = [], skin = new THREE.MeshStandardMaterial({ color: skinColor(M.Body).multiplyScalar(0.94), roughness: 0.62, metalness: 0, name: 'skin_arm_leg' });
+  log.push('skin ' + skin.color.getHexString());
+
+  // 1) Κοντό μανίκι
+  for (const S of ['Left', 'Right']) {
+    const sh = bonePos(M.Shirt, S + 'Arm'), el = bonePos(M.Shirt, S + 'ForeArm'), axis = el.clone().sub(sh), L = axis.length(); axis.normalize();
+    const arm = split(M.Shirt, (cen, vs) => { const side = Math.sign(cen.x) === Math.sign(sh.x); return side && Math.min(...vs.map(v => v.clone().sub(sh).dot(axis) / L)) > OPT.sleeveCut; }, skin, `Arm${S}`);
+    snapEdge(M.Shirt, sh, axis, L, OPT.sleeveCut);
+    const hand = bonePos(M.Shirt, S + 'Hand');
+    // λέπτυνση ακολουθώντας ώμο→αγκώνα→καρπό
+    shrinkToward(arm, sh, el, OPT.sleeveCut, OPT.sleeveShrink, usedVerts(arm));
+    shrinkToward(arm, el, hand, 0.0, OPT.sleeveShrink, [...usedVerts(arm)].filter(i => { const v = toSkel(arm, V().fromBufferAttribute(arm.geometry.attributes.position, i)); return v.clone().sub(el).dot(axis) > 0; }));
+    log.push(`μανίκι ${S}: ${arm.geometry.index.count / 3} τρίγωνα → δέρμα`);
+  }
+  // 2) Κοντή κάλτσα
+  for (const S of ['Left', 'Right']) {
+    const an = bonePos(M.Socks, S + 'Foot'), kn = bonePos(M.Socks, S + 'Leg');
+    const leg = split(M.Socks, cen => Math.sign(cen.x) === Math.sign(an.x) && cen.y > an.y + OPT.sockCut * H / 1.7, skin, `Calf${S}`);
+    shrinkToward(leg, an, kn, (OPT.sockCut * H / 1.7) / (kn.y - an.y), OPT.sockShrink, usedVerts(leg));
+    log.push(`κάλτσα ${S}: ${leg.geometry.index.count / 3} τρίγωνα → δέρμα`);
+  }
+  // 3) Παπούτσια: ίσιωμα ταπών + αθλητικό χρώμα (λευκό επάνω, σκούρα σόλα)
+  {
+    const sh = M.Shoes, pos = sh.geometry.attributes.position, ys = [];
+    for (let i = 0; i < pos.count; i++) ys.push(toSkel(sh, V().fromBufferAttribute(pos, i)).y);
+    const minY = Math.min(...ys), sorted = [...ys].sort((a, b) => a - b);
+    // επίπεδο σόλας: το ύψος κάτω από το οποίο βρίσκεται ~6% των κορυφών (οι τάπες είναι λίγες, μυτερές κορυφές)
+    const soleY = minY + 0.03 * H / 1.7; // οι τάπες ~2-3 cm κάτω από τη σόλα
+    let moved = 0;
+    for (let i = 0; i < pos.count; i++) if (ys[i] < soleY) { const v = toSkel(sh, V().fromBufferAttribute(pos, i)); v.y = soleY; const lv = fromSkel(sh, v); pos.setXYZ(i, lv.x, lv.y, lv.z); moved++; }
+    pos.needsUpdate = true; sh.geometry.computeVertexNormals();
+    // Χρώμα με vertex colors: λευκό επάνω, σκούρα σόλα, με ομαλή μετάβαση (χωρίς «δόντια»)
+    const cols = new Float32Array(pos.count * 3), up = new THREE.Color(OPT.shoe), lo = new THREE.Color(OPT.sole), tmp = new THREE.Color();
+    const sole1 = soleY + 0.012 * H / 1.7, sole2 = soleY + 0.022 * H / 1.7;
+    for (let i = 0; i < pos.count; i++) { const y = toSkel(sh, V().fromBufferAttribute(pos, i)).y; tmp.copy(lo).lerp(up, THREE.MathUtils.smoothstep(y, sole1, sole2)); cols.set([tmp.r, tmp.g, tmp.b], i * 3); }
+    sh.geometry.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+    sh.material = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.55, normalMap: sh.material.normalMap || null, name: 'shoe_trainer' });
+    log.push(`παπούτσια: τάπες ${(soleY - minY).toFixed(3)} → 0, ${moved} κορυφές`);
+  }
+  // 4) Σορτς σκούρο μπλε (κρατά τις πτυχώσεις από το normal map)
+  M.Shorts.material = new THREE.MeshStandardMaterial({ color: OPT.shorts, roughness: 0.8, normalMap: M.Shorts.material.normalMap || null, name: 'shorts_navy' });
+
+  const glb = await new GLTFExporter().parseAsync(root, { binary: true });
+  return { glb, log };
+}
+
+window.applyUrl = async u => { const r = await apply(u); const b = new Uint8Array(r.glb); let s = ''; for (let i = 0; i < b.length; i += 8192) s += String.fromCharCode(...b.subarray(i, i + 8192)); return { b64: btoa(s), log: r.log }; };
+window.ready = true;
+document.getElementById('go').onclick = async () => {
+  const r = await apply('../assets/models/coach_nikos.glb');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([r.glb])); a.download = 'coach_nikos.glb'; a.click();
+  document.getElementById('out').textContent = r.log.join('\n');
+};
+</script></body></html>
