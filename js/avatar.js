@@ -38,6 +38,7 @@ export const LOOKS = {
   real:   { name: 'Μισέλ', gender: 'f', model: 'assets/models/Michelle.glb', proxy: 'male', hair: 'original' },
   nikos:  { name: 'Νίκος', model: 'assets/models/coach_nikos.glb', proxy: 'male', hair: 'original', gender: 'm' },
   eleni:  { name: 'Ελένη', model: 'assets/models/coach_eleni.glb', proxy: 'male', hair: 'original', gender: 'f' },
+  markos: { name: 'Μάρκος', model: 'assets/models/coach_markos.glb', proxy: 'male', hair: 'original', gender: 'm' },
   custom: { name: 'Δικό μου μοντέλο', custom: true, proxy: 'male', hair: 'original' },
   male:   { name: 'Άντρας', skin: 0xe2ab80, hair: 'short', hairColor: 0x2a1f1a, top: 0x16a34a, bottom: 0x1f2937, shoulder: 1.0, hip: 1.0, waist: 1.0, ponytail: false, leggings: false, scale: 1 },
   female: { name: 'Γυναίκα', skin: 0xeab898, hair: 'ponytail', hairColor: 0x6b3f26, top: 0x0ea5e9, bottom: 0x334155, shoulder: 0.88, hip: 1.1, waist: 0.86, ponytail: true, leggings: true, scale: 0.96 },
